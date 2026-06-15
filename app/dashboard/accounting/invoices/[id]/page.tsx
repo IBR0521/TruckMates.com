@@ -11,6 +11,7 @@ import { use } from "react"
 import { exportToPDF } from "@/lib/export-utils"
 import { toast } from "sonner"
 import { getInvoice } from "@/app/actions/accounting"
+import { getInvoiceVerification, verifyInvoiceMatch } from "@/app/actions/invoice-verification"
 import { sendInvoiceEmail, getInvoiceRecipientEmail } from "@/app/actions/invoice-email"
 import { markInvoiceFactoringFunded } from "@/app/actions/factoring-email"
 import { submitInvoiceToTriumphPay, syncInvoiceFactoringStatus } from "@/app/actions/factoring-api"
@@ -91,6 +92,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [shareMailPreparing, setShareMailPreparing] = useState(false)
   const [sendingFactoring, setSendingFactoring] = useState(false)
   const [markingFunded, setMarkingFunded] = useState(false)
+  const [verificationStatus, setVerificationStatus] = useState<string | null>(null)
+  const [verifying, setVerifying] = useState(false)
 
   useEffect(() => {
     return () => {
@@ -119,6 +122,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         const recipientResult = await getInvoiceRecipientEmail(id)
         if (aliveRef.current && !recipientResult.error) {
           setResolvedRecipientEmail(recipientResult.data?.email ?? null)
+        }
+        const verifyResult = await getInvoiceVerification(id)
+        if (aliveRef.current && verifyResult.data) {
+          setVerificationStatus(String(verifyResult.data.verification_status || "unknown"))
         }
       }
       setIsLoading(false)
@@ -527,6 +534,32 @@ PDF and supporting documents are not attached here. Use TruckMates → Invoice �
                 )}
               </p>
             )}
+            <div className="flex items-center gap-2 mt-2">
+              {verificationStatus && (
+                <span className="text-xs rounded-full border border-border px-2 py-0.5 capitalize">
+                  3-way match: {verificationStatus.replace(/_/g, " ")}
+                </span>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                disabled={verifying}
+                onClick={async () => {
+                  setVerifying(true)
+                  const r = await verifyInvoiceMatch(id)
+                  if (r.error) toast.error(r.error)
+                  else {
+                    toast.success("Verification updated")
+                    const v = await getInvoiceVerification(id)
+                    if (v.data) setVerificationStatus(String(v.data.verification_status || "unknown"))
+                  }
+                  setVerifying(false)
+                }}
+              >
+                {verifying ? "Verifying…" : "Re-verify match"}
+              </Button>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2 relative justify-end">
             <Button

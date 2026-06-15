@@ -368,14 +368,22 @@ export async function generateIFTAReport(quarter: number, year: number) {
     .gte("purchase_date", startDate)
     .lte("purchase_date", endDate)
 
-  // Get routes/miles for the quarter (this would need to be calculated from route data)
-  // For now, we'll use a placeholder - in production, this would aggregate from routes table
+  // Aggregate miles from routes and delivered loads in the quarter
+  const { data: loadsInQuarter } = await supabase
+    .from("loads")
+    .select("origin_state, destination_state, estimated_miles, actual_miles, shipper_state, consignee_state")
+    .eq("company_id", ctx.companyId)
+    .gte("load_date", startDate)
+    .lte("load_date", endDate)
+    .limit(2000)
+
   const { data: routes } = await supabase
     .from("routes")
     .select("distance, origin, destination")
     .eq("company_id", ctx.companyId)
     .gte("created_at", startDate)
     .lte("created_at", endDate)
+    .limit(2000)
 
   // Calculate state-by-state breakdown
   const stateData: Record<string, { gallons: number; miles: number }> = {}
@@ -391,10 +399,37 @@ export async function generateIFTAReport(quarter: number, year: number) {
     }
   })
 
-  // Aggregate miles by state (simplified - in production, use actual route tracking)
-  // For now, estimate miles based on fuel purchases (assuming 6.5 MPG)
+  // Aggregate miles from load records (origin/destination states)
+  loadsInQuarter?.forEach((load: {
+    origin_state?: string | null
+    destination_state?: string | null
+    shipper_state?: string | null
+    consignee_state?: string | null
+    estimated_miles?: number | null
+    actual_miles?: number | null
+  }) => {
+    const miles = Number(load.actual_miles ?? load.estimated_miles ?? 0)
+    if (!Number.isFinite(miles) || miles <= 0) return
+    const state = String(load.destination_state || load.consignee_state || load.origin_state || load.shipper_state || "").toUpperCase()
+    if (!state || state.length !== 2) return
+    if (!stateData[state]) stateData[state] = { gallons: 0, miles: 0 }
+    stateData[state].miles += miles
+  })
+
+  routes?.forEach((route: { distance?: string | number | null; origin?: string | null; destination?: string | null }) => {
+    const miles = Number(String(route.distance || "").replace(/[^0-9.]/g, "")) || 0
+    if (miles <= 0) return
+    const destState = String(route.destination || "").match(/\b([A-Z]{2})\b/)?.[1]
+    if (!destState) return
+    if (!stateData[destState]) stateData[destState] = { gallons: 0, miles: 0 }
+    stateData[destState].miles += miles
+  })
+
+  // Fill remaining mile gaps from fuel purchases (6.5 MPG estimate) where no load/route miles
   Object.keys(stateData).forEach((state) => {
-    stateData[state].miles = stateData[state].gallons * 6.5
+    if (stateData[state].miles <= 0 && stateData[state].gallons > 0) {
+      stateData[state].miles = stateData[state].gallons * 6.5
+    }
   })
 
   // Calculate totals

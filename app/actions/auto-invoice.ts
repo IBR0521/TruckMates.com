@@ -170,7 +170,7 @@ async function createAutoDraftInvoiceForLoad(
   const { data: load, error: loadError } = await admin
     .from("loads")
     .select(
-      "id, shipment_number, customer_name, consignee_name, company_name, origin, destination, rate, value, total_rate",
+      "id, shipment_number, customer_name, customer_id, consignee_name, consignee_state, destination_state, company_name, origin, destination, rate, value, total_rate",
     )
     .eq("id", loadId)
     .eq("company_id", companyId)
@@ -214,16 +214,15 @@ async function createAutoDraftInvoiceForLoad(
   let subtotal = amount
   let taxAmount = 0
   let finalAmount = amount
-  if (settings?.tax_enabled && settings.default_tax_rate) {
-    if (settings.tax_inclusive) {
-      subtotal = Math.round((finalAmount / (1 + settings.default_tax_rate / 100)) * 100) / 100
-      taxAmount = Math.round((finalAmount - subtotal) * 100) / 100
-      finalAmount = Math.round((subtotal + taxAmount) * 100) / 100
-    } else {
-      taxAmount = Math.round((subtotal * settings.default_tax_rate) / 100 * 100) / 100
-      finalAmount = Math.round((subtotal + taxAmount) * 100) / 100
-    }
-  }
+  const { resolveInvoiceTaxes } = await import("@/lib/finance-settings")
+  const resolvedTax = await resolveInvoiceTaxes(admin, companyId, amount, {
+    customerId: load.customer_id as string | null,
+    stateCode: String(load.consignee_state || load.destination_state || "") || null,
+    defaults: settings,
+  })
+  subtotal = resolvedTax.subtotal
+  taxAmount = resolvedTax.taxAmount
+  finalAmount = resolvedTax.total
 
   const lineItems = [
     {

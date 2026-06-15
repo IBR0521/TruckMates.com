@@ -97,6 +97,36 @@ export async function createRoadsideInspection(formData: {
     const { data, error } = await supabase.from("roadside_inspections").insert(payload).select(INSPECTION_SELECT).single()
     if (error) return { error: "Failed to create roadside inspection", data: null }
 
+    if (payload.out_of_service) {
+      try {
+        const { data: settings } = await supabase
+          .from("company_settings")
+          .select("notify_on_roadside_oos")
+          .eq("company_id", ctx.companyId)
+          .maybeSingle()
+        if (settings?.notify_on_roadside_oos !== false) {
+          const { sendNotification } = await import("./notifications")
+          const { data: managers } = await supabase
+            .from("users")
+            .select("id")
+            .eq("company_id", ctx.companyId)
+            .in("role", ["super_admin", "operations_manager", "safety_compliance"])
+          for (const mgr of managers || []) {
+            await sendNotification(mgr.id, "load_update", {
+              company_id: ctx.companyId,
+              title: "Roadside inspection: Out of Service",
+              message: `Level ${payload.level} inspection at ${payload.location || "unknown location"} placed vehicle/driver OOS.`,
+              priority: "critical",
+              event: "roadside_oos",
+              inspection_id: data.id,
+            })
+          }
+        }
+      } catch (notifyErr) {
+        Sentry.captureException(notifyErr)
+      }
+    }
+
     revalidatePath("/dashboard/compliance")
     if (payload.driver_id) revalidatePath(`/dashboard/drivers/${payload.driver_id}`)
     return { data, error: null }

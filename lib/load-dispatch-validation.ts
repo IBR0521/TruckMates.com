@@ -18,6 +18,7 @@ import {
   parseRequiredStatuses,
   type OperationsWorkflowSettings,
 } from "./load-workflow-settings"
+import { getHazmatReadinessError, getHosReadinessError } from "./compliance-readiness"
 
 export const PRE_DISPATCH_STATUSES = new Set<LoadStatus>(["draft", "pending", "confirmed"])
 
@@ -31,7 +32,7 @@ export const LOAD_REQUIRED_DOCUMENT_TYPES = [
 ] as const
 
 export type CompanyDispatchSettingsExtended = CompanyDispatchSettings &
-  Pick<OperationsWorkflowSettings, "dispatch_approval_required"> & {
+  Pick<OperationsWorkflowSettings, "dispatch_approval_required" | "consider_driver_hours"> & {
     emergency_contact_required?: boolean | null
   }
 
@@ -121,6 +122,10 @@ export type DispatchReadinessInput = {
   truckId?: string | null
   driverId?: string | null
   settings?: CompanyDispatchSettingsExtended | null
+  isHazardous?: boolean
+  unNumber?: string | null
+  hazardClass?: string | null
+  properShippingName?: string | null
 }
 
 /** Returns the first blocking error when moving onto the dispatch path, or null if ready. */
@@ -213,6 +218,47 @@ export async function getDispatchReadinessError(
       return "Driver emergency contact phone is required before dispatch."
     }
   }
+
+  let isHazardous = Boolean(input.isHazardous)
+  let unNumber = input.unNumber
+  let hazardClass = input.hazardClass
+  let properShippingName = input.properShippingName
+  if (input.loadId && isHazardous === false && unNumber === undefined) {
+    const { data: loadRow } = await input.supabase
+      .from("loads")
+      .select("is_hazardous, un_number, hazard_class, proper_shipping_name")
+      .eq("id", input.loadId)
+      .eq("company_id", input.companyId)
+      .maybeSingle()
+    if (loadRow) {
+      isHazardous = Boolean(loadRow.is_hazardous)
+      unNumber = loadRow.un_number
+      hazardClass = loadRow.hazard_class
+      properShippingName = loadRow.proper_shipping_name
+    }
+  }
+
+  const hazmatError = await getHazmatReadinessError(
+    input.supabase,
+    input.companyId,
+    {
+      is_hazardous: isHazardous,
+      un_number: unNumber,
+      hazard_class: hazardClass,
+      proper_shipping_name: properShippingName,
+    },
+    driverId,
+  )
+  if (hazmatError) return hazmatError
+
+  const hosError = await getHosReadinessError(
+    input.supabase,
+    input.companyId,
+    driverId,
+    Boolean(settings?.consider_driver_hours),
+    next,
+  )
+  if (hosError) return hosError
 
   return null
 }

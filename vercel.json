@@ -21,6 +21,18 @@
       "schedule": "3,18,33,48 * * * *"
     },
     {
+      "path": "/api/cron/scan-document-expiry",
+      "schedule": "5 8 * * *"
+    },
+    {
+      "path": "/api/cron/scan-permit-expiry",
+      "schedule": "10 8 * * *"
+    },
+    {
+      "path": "/api/cron/scan-invoice-overdue",
+      "schedule": "0 9 * * *"
+    },
+    {
       "path": "/api/cron/alert-escalations",
       "schedule": "0 0 * * *"
     },
@@ -147,6 +159,18 @@
       "memory": 1024
     },
     "app/api/cron/scan-dispatch-events/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "app/api/cron/scan-document-expiry/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "app/api/cron/scan-permit-expiry/route.ts": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "app/api/cron/scan-invoice-overdue/route.ts": {
       "maxDuration": 300,
       "memory": 1024
     },

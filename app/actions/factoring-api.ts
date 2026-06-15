@@ -65,6 +65,10 @@ export async function submitInvoiceToTriumphPay(invoiceId: string) {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
 
+  const { requirePlanFeature } = await import("@/lib/plan-feature-guard")
+  const planError = await requirePlanFeature(ctx.companyId, "factoring_api")
+  if (planError) return { error: planError, data: null }
+
   const configResult = await getTriumphConfig(ctx.companyId)
   if (configResult.error || !configResult.data) return { error: configResult.error || "TriumphPay config not found", data: null }
   const config = configResult.data as Record<string, unknown>
@@ -224,6 +228,7 @@ export async function syncInvoiceFactoringStatus(invoiceId: string) {
   }
 
   const nextStatus = normalizeFactoringStatus(responseBody?.status || invoice.factoring_status)
+  const previousStatus = String(invoice.factoring_status || "")
   const now = new Date().toISOString()
 
   const { error: updateError } = await supabase
@@ -242,6 +247,35 @@ export async function syncInvoiceFactoringStatus(invoiceId: string) {
     .eq("id", invoiceId)
     .eq("company_id", ctx.companyId)
   if (updateError) return { error: safeDbError(updateError), data: null }
+
+  if (nextStatus !== previousStatus && ["funded", "rejected", "failed"].includes(nextStatus)) {
+    try {
+      const { data: settings } = await supabase
+        .from("company_settings")
+        .select("notify_on_factoring_status")
+        .eq("company_id", ctx.companyId)
+        .maybeSingle()
+      if (settings?.notify_on_factoring_status !== false) {
+        const { sendNotification } = await import("./notifications")
+        const { data: managers } = await supabase
+          .from("users")
+          .select("id")
+          .eq("company_id", ctx.companyId)
+          .in("role", ["super_admin", "operations_manager", "financial_controller"])
+        for (const mgr of managers || []) {
+          await sendNotification(mgr.id, "payment_reminder", {
+            company_id: ctx.companyId,
+            title: `Factoring ${nextStatus}`,
+            message: `Invoice factoring status changed to ${nextStatus}.`,
+            event: "factoring_status",
+            invoice_id: invoiceId,
+          })
+        }
+      }
+    } catch (e) {
+      Sentry.captureException(e)
+    }
+  }
 
   revalidatePath("/dashboard/accounting/invoices")
   revalidatePath(`/dashboard/accounting/invoices/${invoiceId}`)

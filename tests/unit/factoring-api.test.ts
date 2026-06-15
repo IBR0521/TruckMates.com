@@ -32,6 +32,10 @@ vi.mock("next/cache", () => ({
   revalidatePath: (path: string) => mockRevalidatePath(path),
 }))
 
+vi.mock("@/lib/plan-feature-guard", () => ({
+  requirePlanFeature: vi.fn(async () => null),
+}))
+
 function makeSupabaseMock() {
   const invoiceUpdates: Array<Record<string, unknown>> = []
 

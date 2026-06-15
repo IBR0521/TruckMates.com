@@ -200,8 +200,8 @@ export async function getOptimalDriverSuggestions(
       // MEDIUM FIX: Use batched assignment data instead of per-driver API call
       const driverAssignments = assignmentsByDriver.get(driver.driver_id) || []
       
-      // Check for conflicts using batched data
-      const conflicts: string[] = []
+      // Check for schedule overlaps using batched data
+      const scheduleConflicts: string[] = []
       const loadDate = load.load_date ? new Date(load.load_date) : new Date()
       const deliveryDate = load.estimated_delivery ? new Date(load.estimated_delivery) : new Date(loadDate.getTime() + 24 * 60 * 60 * 1000)
       const asDate = (value: unknown, fallback: Date): Date =>
@@ -221,13 +221,18 @@ export async function getOptimalDriverSuggestions(
           if ((loadDate >= assignLoadDate && loadDate <= assignDeliveryDate) ||
               (deliveryDate >= assignLoadDate && deliveryDate <= assignDeliveryDate) ||
               (loadDate <= assignLoadDate && deliveryDate >= assignDeliveryDate)) {
-            conflicts.push(`Overlaps with load ${assignment.shipment_number || assignment.id}`)
+            scheduleConflicts.push(`Overlaps with load ${assignment.shipment_number || assignment.id}`)
           }
         }
       })
       
-      // Still call HOS check (it's optimized internally)
-      const conflictCheck = { data: { conflicts, hos_violations: [] } }
+      // HOS + assignment conflicts for this driver/load
+      const conflictCheck = await checkAssignmentConflicts(driver.driver_id, load.id, undefined)
+      const conflicts = [...scheduleConflicts, ...(conflictCheck.data?.conflicts ?? [])]
+      const hosViolations = conflictCheck.data?.hos_violations ?? []
+      if (hosViolations.length > 0) {
+        conflicts.push(...hosViolations.map((v) => `HOS: ${v}`))
+      }
 
       // Calculate score (0-100)
       let score = 50 // Base score
@@ -296,7 +301,7 @@ export async function getOptimalDriverSuggestions(
       
       // Still need to check HOS violations (this is optimized internally)
       const hosCheck = await calculateRemainingHOS(driver.driver_id)
-      const hosViolations: string[] = []
+      const estHosViolations: string[] = []
       if (hosCheck.data) {
         const totalDriveTime = driverAssignments.reduce((sum, a) => {
           // Estimate drive time for each assignment (simplified)
@@ -304,11 +309,11 @@ export async function getOptimalDriverSuggestions(
         }, 0) / 60 // Convert to hours
         
         if (totalDriveTime > (hosCheck.data.remainingDriving || 0)) {
-          hosViolations.push(`Insufficient drive time: Need ${totalDriveTime.toFixed(1)}h, have ${hosCheck.data.remainingDriving.toFixed(1)}h`)
+          estHosViolations.push(`Insufficient drive time: Need ${totalDriveTime.toFixed(1)}h, have ${hosCheck.data.remainingDriving.toFixed(1)}h`)
         }
       }
       
-      if (hosViolations.length > 0) {
+      if (estHosViolations.length > 0) {
         score -= 30 // HOS violation penalty
       }
 

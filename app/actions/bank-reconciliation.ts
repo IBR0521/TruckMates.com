@@ -82,6 +82,10 @@ export async function importBankStatementCsv(input: {
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId || !ctx.userId) return { error: ctx.error || "Not authenticated", data: null }
 
+    const { requirePlanFeature } = await import("@/lib/plan-feature-guard")
+    const planError = await requirePlanFeature(ctx.companyId, "ap_vendor_invoicing")
+    if (planError) return { error: planError, data: null }
+
     const rows = parseCsv(input.csvText || "")
     if (rows.length === 0) return { error: "CSV appears empty or invalid", data: null }
 

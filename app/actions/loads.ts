@@ -29,6 +29,7 @@ import {
   shouldAttemptAutoDispatchOnReady,
   OPERATIONS_WORKFLOW_SETTINGS_SELECT,
 } from "@/lib/load-dispatch-validation"
+import { calculateFuelSurcharge } from "@/lib/finance-settings"
 import { pickAutoAssignDriverAndTruck } from "@/lib/load-auto-assign"
 import { isLoadNotifyEventEnabled, type LoadNotifyEvent } from "@/lib/load-operations-notify"
 import { isFirstDispatchTransition } from "@/lib/dispatch-notify-settings"
@@ -661,8 +662,12 @@ export async function createLoad(formData: {
   if (!finalRate && settings.default_rate_per_mile && formData.estimated_miles) {
     finalRate = settings.default_rate_per_mile * formData.estimated_miles
   }
-  if (!finalFuelSurcharge && settings.default_fuel_surcharge_percentage && finalRate) {
-    finalFuelSurcharge = (finalRate * settings.default_fuel_surcharge_percentage) / 100
+  if (!finalFuelSurcharge) {
+    finalFuelSurcharge = calculateFuelSurcharge(settings, {
+      rate: finalRate,
+      estimatedMiles: formData.estimated_miles,
+      explicitSurcharge: formData.fuel_surcharge,
+    })
   }
 
   // Auto-assign driver/truck if enabled and not provided

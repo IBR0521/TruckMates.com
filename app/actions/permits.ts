@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { errorMessage } from "@/lib/error-message"
-import { checkCreatePermission, checkViewPermission } from "@/lib/server-permissions"
+import { checkCreatePermission, checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
 import { validateFileMagicBytes } from "@/lib/file-signature"
 type PermitLimitRule = {
   maxWeight: number
@@ -147,6 +147,61 @@ export async function createPermit(input: {
 
   if (input.load_id) revalidatePath(`/dashboard/loads/${input.load_id}`)
   revalidatePath("/dashboard/documents")
+  revalidatePath("/dashboard/permits")
+  return { data, error: null }
+}
+
+export async function updatePermit(
+  permitId: string,
+  input: {
+    permit_number?: string
+    issuing_state?: string
+    permit_type?: string
+    issued_date?: string | null
+    expiry_date?: string | null
+    max_weight?: number | null
+    max_height?: number | null
+    max_width?: number | null
+    max_length?: number | null
+    route_restriction?: string | null
+    load_id?: string | null
+    truck_id?: string | null
+  },
+) {
+  const permission = await checkEditPermission("documents")
+  if (!permission.allowed) return { error: permission.error || "Not allowed", data: null }
+
+  const supabase = await createClient()
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
+
+  const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (input.permit_number !== undefined) updatePayload.permit_number = input.permit_number
+  if (input.issuing_state !== undefined) updatePayload.issuing_state = input.issuing_state
+  if (input.permit_type !== undefined) updatePayload.permit_type = input.permit_type
+  if (input.issued_date !== undefined) updatePayload.issued_date = input.issued_date
+  if (input.expiry_date !== undefined) updatePayload.expiry_date = input.expiry_date
+  if (input.max_weight !== undefined) updatePayload.max_weight = input.max_weight
+  if (input.max_height !== undefined) updatePayload.max_height = input.max_height
+  if (input.max_width !== undefined) updatePayload.max_width = input.max_width
+  if (input.max_length !== undefined) updatePayload.max_length = input.max_length
+  if (input.route_restriction !== undefined) updatePayload.route_restriction = input.route_restriction
+  if (input.load_id !== undefined) updatePayload.load_id = input.load_id
+  if (input.truck_id !== undefined) updatePayload.truck_id = input.truck_id
+
+  const { data, error } = await supabase
+    .from("permits")
+    .update(updatePayload)
+    .eq("id", permitId)
+    .eq("company_id", ctx.companyId)
+    .select("*")
+    .single()
+
+  if (error) return { error: safeDbError(error), data: null }
+
+  if (data?.load_id) revalidatePath(`/dashboard/loads/${data.load_id}`)
+  revalidatePath("/dashboard/documents")
+  revalidatePath("/dashboard/permits")
   return { data, error: null }
 }
 

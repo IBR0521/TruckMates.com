@@ -517,6 +517,24 @@ async function executeCashFlowAlert(payload: Record<string, unknown>): Promise<E
   return { success: true, result: "Cash flow alert dispatched", error: null }
 }
 
+async function executeDocumentExpiryAlert(payload: Record<string, unknown>): Promise<ExecutionResult> {
+  const companyId = asString(payload.companyId || payload.company_id)
+  if (!companyId) return { success: false, result: "", error: "companyId is required" }
+
+  try {
+    const { scanDocumentExpiryForCompany } = await import("@/app/actions/document-expiry-notify")
+    const result = await scanDocumentExpiryForCompany(companyId)
+    if (result.error) return { success: false, result: "", error: result.error }
+    return {
+      success: true,
+      result: `Document expiry scan: ${result.data?.notified ?? 0} notified`,
+      error: null,
+    }
+  } catch (e: unknown) {
+    return { success: false, result: "", error: errorMessage(e, "Document expiry alert failed") }
+  }
+}
+
 async function executeCsaThresholdAlert(payload: Record<string, unknown>): Promise<ExecutionResult> {
   const companyId = asString(payload.companyId || payload.company_id)
   if (!companyId) return { success: false, result: "", error: "companyId is required" }
@@ -726,6 +744,9 @@ export async function executeAgentAction(
       break
     case "csa_threshold_alert":
       execution = await executeCsaThresholdAlert(payloadWithCompany)
+      break
+    case "document_expiry_alert":
+      execution = await executeDocumentExpiryAlert(payloadWithCompany)
       break
     case "fuel_anomaly":
       execution = await executeFuelAnomaly(payloadWithCompany)

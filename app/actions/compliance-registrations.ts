@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { errorMessage } from "@/lib/error-message"
 import { checkCreatePermission, checkDeletePermission, checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
+import { parseComplianceExpiryLeadDays } from "@/lib/compliance-notify-settings"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { sanitizeString } from "@/lib/validation"
@@ -239,13 +240,26 @@ export async function processComplianceRegistrationExpiryAlerts() {
     const todayIso = today.toISOString()
 
     let alertsCreated = 0
+    const leadDaysByCompany = new Map<string, number[]>()
+
     for (const reg of registrations || []) {
       const expiry = new Date(reg.expiry_date)
       if (Number.isNaN(expiry.getTime())) continue
       expiry.setHours(0, 0, 0, 0)
 
+      let leadDays = leadDaysByCompany.get(reg.company_id)
+      if (!leadDays) {
+        const { data: companySettings } = await admin
+          .from("company_settings")
+          .select("compliance_expiry_lead_days")
+          .eq("company_id", reg.company_id)
+          .maybeSingle()
+        leadDays = parseComplianceExpiryLeadDays(companySettings?.compliance_expiry_lead_days)
+        leadDaysByCompany.set(reg.company_id, leadDays)
+      }
+
       const daysUntilExpiry = Math.floor((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-      if (![60, 30, 7].includes(daysUntilExpiry)) continue
+      if (!leadDays.includes(daysUntilExpiry)) continue
 
       const eventType = registrationEventType(reg.type as ComplianceRegistrationType)
       const { data: exists } = await admin

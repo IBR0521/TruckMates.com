@@ -12,7 +12,7 @@ import {
 import { toast } from "sonner"
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { getIntegrationSettings } from "@/app/actions/settings-integration"
+import { getIntegrationSettings, updateIntegrationSettings } from "@/app/actions/settings-integration"
 import { getGLAccounts } from "@/app/actions/gl-accounts"
 import { useSearchParams } from "next/navigation"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
@@ -48,6 +48,22 @@ export default function IntegrationSettingsPage() {
     quickbooks_default_item_id: "" as string,
     quickbooks_gl_account_mappings: {} as Record<string, string>,
     quickbooks_allowed: false,
+    comdata_enabled: false,
+    wex_enabled: false,
+    efs_enabled: false,
+    has_comdata_credentials: false,
+    has_wex_credentials: false,
+    has_efs_credentials: false,
+    comdata_api_base_url: "",
+    wex_api_base_url: "",
+    efs_api_base_url: "",
+    comdata_api_key: "",
+    comdata_api_secret: "",
+    wex_api_key: "",
+    wex_api_secret: "",
+    efs_api_key: "",
+    efs_api_secret: "",
+    fuel_card_last_synced_at: null as string | null,
   })
   const [glAccounts, setGlAccounts] = useState<Array<{ id: string; code: string; name: string; type: string }>>([])
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
@@ -85,6 +101,22 @@ export default function IntegrationSettingsPage() {
             quickbooks_default_item_id: quickBooks.quickbooks_default_item_id || "",
             quickbooks_gl_account_mappings: quickBooks.quickbooks_gl_account_mappings || {},
             quickbooks_allowed: !!quickBooks.quickbooks_allowed,
+            comdata_enabled: !!result.data.comdata_enabled,
+            wex_enabled: !!result.data.wex_enabled,
+            efs_enabled: !!result.data.efs_enabled,
+            has_comdata_credentials: !!result.data.has_comdata_credentials,
+            has_wex_credentials: !!result.data.has_wex_credentials,
+            has_efs_credentials: !!result.data.has_efs_credentials,
+            comdata_api_base_url: result.data.comdata_api_base_url || "",
+            wex_api_base_url: result.data.wex_api_base_url || "",
+            efs_api_base_url: result.data.efs_api_base_url || "",
+            comdata_api_key: "",
+            comdata_api_secret: "",
+            wex_api_key: "",
+            wex_api_secret: "",
+            efs_api_key: "",
+            efs_api_secret: "",
+            fuel_card_last_synced_at: result.data.fuel_card_last_synced_at || null,
           })
         }
         if (!glResult.error && glResult.data) {
@@ -197,6 +229,100 @@ export default function IntegrationSettingsPage() {
     } catch (e: unknown) {
       toast.error(errorMessage(e, "Failed to save QuickBooks mapping"))
     }
+  }
+
+  async function saveFuelCardSettings() {
+    try {
+      const payload: Parameters<typeof updateIntegrationSettings>[0] = {
+        comdata_enabled: integrations.comdata_enabled,
+        comdata_api_base_url: integrations.comdata_api_base_url || undefined,
+        wex_enabled: integrations.wex_enabled,
+        wex_api_base_url: integrations.wex_api_base_url || undefined,
+        efs_enabled: integrations.efs_enabled,
+        efs_api_base_url: integrations.efs_api_base_url || undefined,
+      }
+      if (integrations.comdata_api_key) payload.comdata_api_key = integrations.comdata_api_key
+      if (integrations.comdata_api_secret) payload.comdata_api_secret = integrations.comdata_api_secret
+      if (integrations.wex_api_key) payload.wex_api_key = integrations.wex_api_key
+      if (integrations.wex_api_secret) payload.wex_api_secret = integrations.wex_api_secret
+      if (integrations.efs_api_key) payload.efs_api_key = integrations.efs_api_key
+      if (integrations.efs_api_secret) payload.efs_api_secret = integrations.efs_api_secret
+
+      const result = await updateIntegrationSettings(payload)
+      if (!result.success) throw new Error(result.error || "Save failed")
+      toast.success("Fuel card settings saved")
+      const refreshed = await getIntegrationSettings()
+      if (!refreshed.error && refreshed.data) {
+        setIntegrations((prev) => ({
+          ...prev,
+          has_comdata_credentials: !!refreshed.data?.has_comdata_credentials,
+          has_wex_credentials: !!refreshed.data?.has_wex_credentials,
+          has_efs_credentials: !!refreshed.data?.has_efs_credentials,
+          fuel_card_last_synced_at: refreshed.data?.fuel_card_last_synced_at || null,
+          comdata_api_key: "",
+          comdata_api_secret: "",
+          wex_api_key: "",
+          wex_api_secret: "",
+          efs_api_key: "",
+          efs_api_secret: "",
+        }))
+      }
+    } catch (e: unknown) {
+      toast.error(errorMessage(e, "Failed to save fuel card settings"))
+    }
+  }
+
+  function FuelProviderFields(props: {
+    label: string
+    enabled: boolean
+    onEnabledChange: (v: boolean) => void
+    baseUrl: string
+    onBaseUrlChange: (v: string) => void
+    apiKey: string
+    onApiKeyChange: (v: string) => void
+    apiSecret: string
+    onApiSecretChange: (v: string) => void
+    hasCredentials: boolean
+  }) {
+    return (
+      <div className="border rounded-lg p-4 bg-card space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="font-medium">{props.label}</h4>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={props.enabled}
+              onChange={(e) => props.onEnabledChange(e.target.checked)}
+            />
+            Enabled
+          </label>
+        </div>
+        <div className="grid gap-2">
+          <input
+            className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+            placeholder="API base URL"
+            value={props.baseUrl}
+            onChange={(e) => props.onBaseUrlChange(e.target.value)}
+          />
+          <input
+            className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+            placeholder={props.hasCredentials ? "API key (leave blank to keep)" : "API key"}
+            value={props.apiKey}
+            onChange={(e) => props.onApiKeyChange(e.target.value)}
+          />
+          <input
+            type="password"
+            className="w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+            placeholder={props.hasCredentials ? "API secret (leave blank to keep)" : "API secret"}
+            value={props.apiSecret}
+            onChange={(e) => props.onApiSecretChange(e.target.value)}
+          />
+        </div>
+        {props.hasCredentials && (
+          <p className="text-xs text-muted-foreground">Credentials configured</p>
+        )}
+      </div>
+    )
   }
 
 
@@ -492,6 +618,64 @@ export default function IntegrationSettingsPage() {
                     Note: A company stays on the sandbox/production mode it connected with until they disconnect and reconnect.
                   </p>
                 )}
+              </div>
+
+              {/* Fuel card providers */}
+              <div className="border rounded-lg p-4 bg-card space-y-4">
+                <div>
+                  <h3 className="font-semibold">Fuel card imports</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Connect Comdata, WEX, or EFS credentials for automated fuel card transaction imports.
+                  </p>
+                  {integrations.fuel_card_last_synced_at && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Last synced: {new Date(integrations.fuel_card_last_synced_at).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+                <div className="grid gap-4 md:grid-cols-1">
+                  <FuelProviderFields
+                    label="Comdata"
+                    enabled={integrations.comdata_enabled}
+                    onEnabledChange={(v) => setIntegrations((p) => ({ ...p, comdata_enabled: v }))}
+                    baseUrl={integrations.comdata_api_base_url}
+                    onBaseUrlChange={(v) => setIntegrations((p) => ({ ...p, comdata_api_base_url: v }))}
+                    apiKey={integrations.comdata_api_key}
+                    onApiKeyChange={(v) => setIntegrations((p) => ({ ...p, comdata_api_key: v }))}
+                    apiSecret={integrations.comdata_api_secret}
+                    onApiSecretChange={(v) => setIntegrations((p) => ({ ...p, comdata_api_secret: v }))}
+                    hasCredentials={integrations.has_comdata_credentials}
+                  />
+                  <FuelProviderFields
+                    label="WEX"
+                    enabled={integrations.wex_enabled}
+                    onEnabledChange={(v) => setIntegrations((p) => ({ ...p, wex_enabled: v }))}
+                    baseUrl={integrations.wex_api_base_url}
+                    onBaseUrlChange={(v) => setIntegrations((p) => ({ ...p, wex_api_base_url: v }))}
+                    apiKey={integrations.wex_api_key}
+                    onApiKeyChange={(v) => setIntegrations((p) => ({ ...p, wex_api_key: v }))}
+                    apiSecret={integrations.wex_api_secret}
+                    onApiSecretChange={(v) => setIntegrations((p) => ({ ...p, wex_api_secret: v }))}
+                    hasCredentials={integrations.has_wex_credentials}
+                  />
+                  <FuelProviderFields
+                    label="EFS"
+                    enabled={integrations.efs_enabled}
+                    onEnabledChange={(v) => setIntegrations((p) => ({ ...p, efs_enabled: v }))}
+                    baseUrl={integrations.efs_api_base_url}
+                    onBaseUrlChange={(v) => setIntegrations((p) => ({ ...p, efs_api_base_url: v }))}
+                    apiKey={integrations.efs_api_key}
+                    onApiKeyChange={(v) => setIntegrations((p) => ({ ...p, efs_api_key: v }))}
+                    apiSecret={integrations.efs_api_secret}
+                    onApiSecretChange={(v) => setIntegrations((p) => ({ ...p, efs_api_secret: v }))}
+                    hasCredentials={integrations.has_efs_credentials}
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button variant="outline" size="sm" onClick={() => void saveFuelCardSettings()}>
+                    Save fuel card settings
+                  </Button>
+                </div>
               </div>
 
               {/* Stripe */}

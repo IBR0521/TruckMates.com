@@ -36,6 +36,17 @@ const COMPANY_SETTINGS_SELECT = `
   notify_on_driver_late, notify_on_route_deviation, notification_channels,
   track_driver_location, location_update_interval, geofence_enabled, geofence_radius,
   emergency_contact_required, auto_notify_on_emergency, emergency_escalation_minutes,
+  auto_invoice_on_delivery,
+  tax_enabled, default_tax_rate, tax_inclusive, tax_name,
+  late_fee_enabled, late_fee_type, late_fee_value, late_fee_grace_period_days,
+  discount_enabled, default_discount_type, early_payment_discount_enabled,
+  early_payment_discount_percentage, early_payment_discount_days,
+  invoice_email_subject, invoice_email_body, send_copy_to_company, cc_emails, bcc_emails,
+  invoice_template, show_company_logo, show_payment_instructions, payment_instructions, footer_text,
+  auto_attach_documents, include_bol_in_invoice,
+  notify_on_document_expiry, notify_on_permit_expiry, notify_on_roadside_oos, notify_on_dot_reportable_incident,
+  compliance_expiry_lead_days, compliance_notification_channels,
+  notify_on_invoice_overdue, notify_on_factoring_status, finance_notification_channels,
   created_at, updated_at
 `
 
@@ -246,6 +257,41 @@ export async function updateCompanySettings(settings: {
   emergency_contact_required?: boolean
   auto_notify_on_emergency?: boolean
   emergency_escalation_minutes?: number
+  auto_invoice_on_delivery?: boolean
+  tax_enabled?: boolean
+  default_tax_rate?: number
+  tax_inclusive?: boolean
+  tax_name?: string
+  late_fee_enabled?: boolean
+  late_fee_type?: string
+  late_fee_value?: number
+  late_fee_grace_period_days?: number
+  discount_enabled?: boolean
+  default_discount_type?: string
+  early_payment_discount_enabled?: boolean
+  early_payment_discount_percentage?: number
+  early_payment_discount_days?: number
+  invoice_email_subject?: string
+  invoice_email_body?: string
+  send_copy_to_company?: boolean
+  cc_emails?: string
+  bcc_emails?: string
+  invoice_template?: string
+  show_company_logo?: boolean
+  show_payment_instructions?: boolean
+  payment_instructions?: string
+  footer_text?: string
+  auto_attach_documents?: boolean
+  include_bol_in_invoice?: boolean
+  notify_on_document_expiry?: boolean
+  notify_on_permit_expiry?: boolean
+  notify_on_roadside_oos?: boolean
+  notify_on_dot_reportable_incident?: boolean
+  compliance_expiry_lead_days?: number[]
+  compliance_notification_channels?: string[]
+  notify_on_invoice_overdue?: boolean
+  notify_on_factoring_status?: boolean
+  finance_notification_channels?: string[]
   // HIGH FIX 3: Removed broad index signatures to prevent arbitrary column injection
 }) {
   const supabase = await createClient()
@@ -295,6 +341,17 @@ export async function updateCompanySettings(settings: {
     'notify_on_driver_late', 'notify_on_route_deviation', 'notification_channels',
     'track_driver_location', 'location_update_interval', 'geofence_enabled', 'geofence_radius',
     'emergency_contact_required', 'auto_notify_on_emergency', 'emergency_escalation_minutes',
+    'auto_invoice_on_delivery',
+    'tax_enabled', 'default_tax_rate', 'tax_inclusive', 'tax_name',
+    'late_fee_enabled', 'late_fee_type', 'late_fee_value', 'late_fee_grace_period_days',
+    'discount_enabled', 'default_discount_type', 'early_payment_discount_enabled',
+    'early_payment_discount_percentage', 'early_payment_discount_days',
+    'invoice_email_subject', 'invoice_email_body', 'send_copy_to_company', 'cc_emails', 'bcc_emails',
+    'invoice_template', 'show_company_logo', 'show_payment_instructions', 'payment_instructions', 'footer_text',
+    'auto_attach_documents', 'include_bol_in_invoice',
+    'notify_on_document_expiry', 'notify_on_permit_expiry', 'notify_on_roadside_oos', 'notify_on_dot_reportable_incident',
+    'compliance_expiry_lead_days', 'compliance_notification_channels',
+    'notify_on_invoice_overdue', 'notify_on_factoring_status', 'finance_notification_channels',
   ]
   
   for (const field of allowedFields) {

@@ -502,6 +502,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                   <NavItem href="/dashboard/dvir" label="DVIR Reports" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/ifta" label="IFTA" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/compliance" label="Safety & Compliance" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/settings/compliance" label="Compliance settings" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/edi" label="EDI" planBadge="Fleet" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/hazmat" label="HAZMAT" planBadge="Fleet" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/permits" label="Permits" planBadge="Fleet" isSubitem isCollapsed={shouldShowCollapsed} />
@@ -521,9 +522,13 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                   isCollapsed={shouldShowCollapsed}
                 >
                   <NavItem href="/dashboard/accounting/invoices" label="Invoices" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/accounting/invoices/auto-generate" label="Auto-generate" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/accounting/expenses" label="Expenses" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/accounting/settlements" label="Settlements" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem href="/dashboard/accounting/tax-fuel" label="Tax & Fuel" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/accounting/tax-fuel/import" label="Fuel card import" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/accounting/ifta/tax-rates" label="IFTA tax rates" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/settings/pay-rules" label="Pay rules" isSubitem isCollapsed={shouldShowCollapsed} />
                 </DropdownItem>
               )}
               {userRole && canViewFeature(userRole, "accounting") && (
@@ -648,6 +653,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                 <NavItem href="/dashboard/settings/portal" label="Portal" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/load" label="Load" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/dispatch" label="Dispatch" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/compliance" label="Compliance" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/business" label="Business" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/year-end" label="Year-End" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/alerts" label="Alerts" isSubitem isCollapsed={shouldShowCollapsed} />

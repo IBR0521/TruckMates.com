@@ -15,17 +15,18 @@ type Attachment = { filename: string; content: Buffer }
 /**
  * After invoice creation, auto-submit to factoring if enabled in company settings.
  */
-export async function maybeAutoSubmitFactoringOnInvoiceCreated(invoiceId: string) {
+export async function maybeAutoSubmitFactoringOnInvoiceCreated(invoiceId: string, companyId?: string) {
   const supabase = await createClient()
   const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
+  const resolvedCompanyId = companyId || ctx.companyId
+  if (!resolvedCompanyId) {
     return { error: null, skipped: true as const }
   }
 
   const { data: settings } = await supabase
     .from("company_settings")
     .select("factoring_auto_submit, factoring_submission_email")
-    .eq("company_id", ctx.companyId)
+    .eq("company_id", resolvedCompanyId)
     .maybeSingle()
 
   if (

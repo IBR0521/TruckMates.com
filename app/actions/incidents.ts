@@ -112,6 +112,36 @@ export async function createIncident(formData: {
     const { data, error } = await supabase.from("incidents").insert(payload).select(INCIDENT_SELECT).single()
     if (error) return { error: "Failed to create incident", data: null }
 
+    if (payload.dot_reportable) {
+      try {
+        const { data: settings } = await supabase
+          .from("company_settings")
+          .select("notify_on_dot_reportable_incident")
+          .eq("company_id", ctx.companyId)
+          .maybeSingle()
+        if (settings?.notify_on_dot_reportable_incident !== false) {
+          const { sendNotification } = await import("./notifications")
+          const { data: managers } = await supabase
+            .from("users")
+            .select("id")
+            .eq("company_id", ctx.companyId)
+            .in("role", ["super_admin", "operations_manager", "safety_compliance"])
+          for (const mgr of managers || []) {
+            await sendNotification(mgr.id, "load_update", {
+              company_id: ctx.companyId,
+              title: "DOT-reportable incident logged",
+              message: `${payload.type} on ${payload.incident_date}${payload.location ? ` at ${payload.location}` : ""}. Review FMCSA accident register requirements.`,
+              priority: "critical",
+              event: "dot_reportable_incident",
+              incident_id: data.id,
+            })
+          }
+        }
+      } catch (notifyErr) {
+        Sentry.captureException(notifyErr)
+      }
+    }
+
     revalidatePath("/dashboard/compliance")
     return { data, error: null }
   } catch (error: unknown) {

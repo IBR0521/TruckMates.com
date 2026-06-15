@@ -28,6 +28,7 @@ type NotificationType =
   | "marketplace_new_matching_load"
   | "morning_digest"
   | "violation_alert"
+  | "document_expiry"
 
 interface NotificationData {
   routeName?: string

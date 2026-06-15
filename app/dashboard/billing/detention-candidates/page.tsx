@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { FeatureLock } from "@/components/billing/feature-lock"
 import { listGeofenceEvents, markGeofenceDetentionReviewed, type GeofenceEventListItem } from "@/app/actions/geofences"
+import { addDetentionChargeToInvoice } from "@/app/actions/detention-invoice"
 import { toast } from "sonner"
 import { errorMessage } from "@/lib/error-message"
 
@@ -34,6 +35,24 @@ export default function DetentionCandidatesPage() {
     void load()
   }, [])
 
+  const addToInvoice = async (e: GeofenceEventListItem) => {
+    if (!e.load_id) {
+      toast.error("No load linked to this event")
+      return
+    }
+    const hours = (e.dwell_seconds ?? 0) / 3600
+    const r = await addDetentionChargeToInvoice({
+      eventId: e.id,
+      loadId: e.load_id,
+      dwellHours: hours,
+    })
+    if (r.error) toast.error(r.error)
+    else {
+      toast.success(r.data?.created ? "Draft invoice created with detention" : "Detention added to invoice")
+      void load()
+    }
+  }
+
   const mark = async (id: string, status: "reviewed" | "ignored") => {
     const r = await markGeofenceDetentionReviewed({ eventId: id, status })
     if (r.error) toast.error(r.error)
@@ -48,7 +67,7 @@ export default function DetentionCandidatesPage() {
       <div>
         <h1 className="text-2xl font-bold">Detention candidates</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Exit events with ~2+ hours dwell (from sparse ELD). “Add to invoice” is deferred — mark reviewed when handled.
+          Exit events with ~2+ hours dwell. Add detention line items to the load invoice or mark reviewed when handled.
         </p>
       </div>
 
@@ -76,6 +95,11 @@ export default function DetentionCandidatesPage() {
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    {e.load_id && (
+                      <Button size="sm" onClick={() => addToInvoice(e)}>
+                        Add to invoice
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" onClick={() => mark(e.id, "reviewed")}>
                       Mark reviewed
                     </Button>

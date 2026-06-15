@@ -72,9 +72,12 @@ export default function InvoiceSettingsPage() {
     footer_text: "",
     
     // Auto-Generation
-    auto_generate_on_delivery: true,
+    auto_invoice_on_delivery: false,
     auto_attach_documents: false,
     include_bol_in_invoice: false,
+    notify_on_invoice_overdue: true,
+    notify_on_factoring_status: true,
+    finance_notification_channels: ["email", "in_app"] as string[],
   })
   const [previewNumber, setPreviewNumber] = useState("")
   const [invoiceTaxes, setInvoiceTaxes] = useState<InvoiceTax[]>([])
@@ -159,9 +162,14 @@ export default function InvoiceSettingsPage() {
           show_payment_instructions: result.data.show_payment_instructions !== false,
           payment_instructions: result.data.payment_instructions || "",
           footer_text: result.data.footer_text || "",
-          auto_generate_on_delivery: result.data.auto_generate_on_delivery !== false,
+          auto_invoice_on_delivery: result.data.auto_invoice_on_delivery === true,
           auto_attach_documents: result.data.auto_attach_documents || false,
           include_bol_in_invoice: result.data.include_bol_in_invoice || false,
+          notify_on_invoice_overdue: result.data.notify_on_invoice_overdue !== false,
+          notify_on_factoring_status: result.data.notify_on_factoring_status !== false,
+          finance_notification_channels: Array.isArray(result.data.finance_notification_channels)
+            ? result.data.finance_notification_channels.map(String)
+            : ["email", "in_app"],
         })
       }
     } catch (error: unknown) {
@@ -307,9 +315,9 @@ export default function InvoiceSettingsPage() {
                   <p className="text-sm text-muted-foreground">Automatically create invoice when load is delivered</p>
                 </div>
                 <Switch
-                  id="auto_generate"
-                  checked={settings.auto_generate_on_delivery}
-                  onCheckedChange={(checked) => setSettings({ ...settings, auto_generate_on_delivery: checked })}
+                  id="auto_invoice_on_delivery"
+                  checked={settings.auto_invoice_on_delivery}
+                  onCheckedChange={(checked) => setSettings({ ...settings, auto_invoice_on_delivery: checked })}
                 />
               </div>
             </div>
@@ -739,6 +747,47 @@ export default function InvoiceSettingsPage() {
                   checked={settings.auto_attach_documents}
                   onCheckedChange={(checked) => setSettings({ ...settings, auto_attach_documents: checked })}
                 />
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Finance notifications</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>Notify on overdue invoices</Label>
+                <Switch
+                  checked={settings.notify_on_invoice_overdue}
+                  onCheckedChange={(checked) => setSettings({ ...settings, notify_on_invoice_overdue: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>Notify on factoring status changes</Label>
+                <Switch
+                  checked={settings.notify_on_factoring_status}
+                  onCheckedChange={(checked) => setSettings({ ...settings, notify_on_factoring_status: checked })}
+                />
+              </div>
+              <p className="text-sm font-medium">Notification channels</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(["email", "sms", "in_app", "push"] as const).map((channel) => (
+                  <label key={channel} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={settings.finance_notification_channels.includes(channel)}
+                      onCheckedChange={(checked) => {
+                        const next = checked
+                          ? [...settings.finance_notification_channels, channel]
+                          : settings.finance_notification_channels.filter((c) => c !== channel)
+                        if (next.length === 0) {
+                          toast.error("At least one notification channel is required")
+                          return
+                        }
+                        setSettings({ ...settings, finance_notification_channels: next })
+                      }}
+                    />
+                    <span className="capitalize">{channel.replace(/_/g, " ")}</span>
+                  </label>
+                ))}
               </div>
             </div>
           </Card>

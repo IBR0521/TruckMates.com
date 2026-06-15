@@ -1,0 +1,40 @@
+-- Compliance & Finance settings columns (idempotent).
+
+ALTER TABLE public.company_settings
+  ADD COLUMN IF NOT EXISTS tax_enabled BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS default_tax_rate DECIMAL(8, 4) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS tax_inclusive BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS tax_name TEXT DEFAULT 'Tax',
+  ADD COLUMN IF NOT EXISTS late_fee_enabled BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS late_fee_type TEXT DEFAULT 'percentage',
+  ADD COLUMN IF NOT EXISTS late_fee_value DECIMAL(10, 2) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS late_fee_grace_period_days INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS discount_enabled BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS default_discount_type TEXT DEFAULT 'percentage',
+  ADD COLUMN IF NOT EXISTS early_payment_discount_enabled BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS early_payment_discount_percentage DECIMAL(8, 4) DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS early_payment_discount_days INTEGER DEFAULT 10,
+  ADD COLUMN IF NOT EXISTS invoice_email_subject TEXT,
+  ADD COLUMN IF NOT EXISTS invoice_email_body TEXT,
+  ADD COLUMN IF NOT EXISTS send_copy_to_company BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS cc_emails TEXT,
+  ADD COLUMN IF NOT EXISTS bcc_emails TEXT,
+  ADD COLUMN IF NOT EXISTS invoice_template TEXT DEFAULT 'default',
+  ADD COLUMN IF NOT EXISTS show_company_logo BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS show_payment_instructions BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS payment_instructions TEXT,
+  ADD COLUMN IF NOT EXISTS footer_text TEXT,
+  ADD COLUMN IF NOT EXISTS auto_attach_documents BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS include_bol_in_invoice BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS notify_on_document_expiry BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS notify_on_permit_expiry BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS notify_on_roadside_oos BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS notify_on_dot_reportable_incident BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS compliance_expiry_lead_days INTEGER[] DEFAULT ARRAY[60, 30, 7],
+  ADD COLUMN IF NOT EXISTS notify_on_invoice_overdue BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS notify_on_factoring_status BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS finance_notification_channels JSONB DEFAULT '["email", "in_app"]'::jsonb,
+  ADD COLUMN IF NOT EXISTS compliance_notification_channels JSONB DEFAULT '["email", "in_app"]'::jsonb;
+
+COMMENT ON COLUMN public.company_settings.compliance_expiry_lead_days IS
+  'Days before expiry to send compliance alerts (documents, permits, registrations).';

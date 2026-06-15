@@ -482,6 +482,18 @@ export async function updateInvoice(
       } catch (error) {
         Sentry.captureException(error)
       }
+      try {
+        const { triggerWebhook } = await import("./webhooks")
+        await triggerWebhook(ctx.companyId, "invoice.paid", {
+          invoice_id: id,
+          invoice_number: data.invoice_number,
+          amount: data.amount,
+          customer_name: data.customer_name,
+          paid_date: data.paid_date,
+        })
+      } catch (error) {
+        Sentry.captureException(error)
+      }
     }
     return { data, error: null }
   } catch (error: unknown) {
@@ -677,6 +689,7 @@ export async function deleteSettlement(id: string) {
 // Create invoice
 export async function createInvoice(formData: {
   customer_name: string
+  customer_id?: string
   load_id?: string
   amount: number
   issue_date: string
@@ -770,22 +783,29 @@ export async function createInvoice(formData: {
   let taxAmount = 0
   let subtotal = finalAmount
 
-  // Apply tax if enabled
-  // V3-006 FIX: Round at each step to prevent float precision errors
-  if (settings.tax_enabled && settings.default_tax_rate) {
-    if (settings.tax_inclusive) {
-      // Tax is included in the amount, calculate subtotal
-      // Round to 2 decimal places to prevent float precision errors
-      subtotal = Math.round((finalAmount / (1 + settings.default_tax_rate / 100)) * 100) / 100
-      taxAmount = Math.round((finalAmount - subtotal) * 100) / 100
-      // Ensure final amount matches exactly
-      finalAmount = Math.round((subtotal + taxAmount) * 100) / 100
-    } else {
-      // Tax is added to the amount
-      taxAmount = Math.round((subtotal * settings.default_tax_rate / 100) * 100) / 100
-      finalAmount = Math.round((subtotal + taxAmount) * 100) / 100
+  const { resolveInvoiceTaxes } = await import("@/lib/finance-settings")
+  let customerIdForTax: string | null = formData.customer_id || null
+  let stateCode: string | null = null
+  if (formData.load_id) {
+    const { data: loadForTax } = await supabase
+      .from("loads")
+      .select("customer_id, destination_state, consignee_state")
+      .eq("id", formData.load_id)
+      .eq("company_id", ctx.companyId)
+      .maybeSingle()
+    if (loadForTax) {
+      customerIdForTax = customerIdForTax || (loadForTax.customer_id as string | null)
+      stateCode = String(loadForTax.destination_state || loadForTax.consignee_state || "") || null
     }
   }
+  const resolvedTax = await resolveInvoiceTaxes(supabase, ctx.companyId, finalAmount, {
+    customerId: customerIdForTax,
+    stateCode,
+    defaults: settings,
+  })
+  subtotal = resolvedTax.subtotal
+  taxAmount = resolvedTax.taxAmount
+  finalAmount = resolvedTax.total
 
   // Calculate due date from payment terms if not provided
   let calculatedDueDate = formData.due_date
@@ -867,7 +887,7 @@ export async function createInvoice(formData: {
       p_customer_name: sanitizeString(formData.customer_name, 200),
       p_payment_terms: sanitizeString(paymentTerms, 50),
       p_description: formData.description ? sanitizeString(formData.description, 2000) : null,
-      p_tax_rate: settings.tax_enabled && settings.default_tax_rate ? settings.default_tax_rate : null,
+      p_tax_rate: resolvedTax.taxRate ?? (settings.tax_enabled && settings.default_tax_rate ? settings.default_tax_rate : null),
     })
     if (rpcInvoiceError) {
       return { data: null, error: safeDbError(rpcInvoiceError, "Invoice not created") }
@@ -964,6 +984,14 @@ export async function createInvoice(formData: {
     try {
       const { maybeAutoSubmitFactoringApiOnInvoiceCreated } = await import("./factoring-api")
       await maybeAutoSubmitFactoringApiOnInvoiceCreated(data.id).catch((err) =>
+        Sentry.captureException(err),
+      )
+    } catch (e) {
+      Sentry.captureException(e)
+    }
+    try {
+      const { maybeAutoSubmitFactoringOnInvoiceCreated } = await import("./factoring-email")
+      await maybeAutoSubmitFactoringOnInvoiceCreated(data.id, ctx.companyId).catch((err) =>
         Sentry.captureException(err),
       )
     } catch (e) {

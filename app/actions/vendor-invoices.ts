@@ -164,6 +164,10 @@ export async function createVendorInvoice(input: {
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
 
+    const { requirePlanFeature } = await import("@/lib/plan-feature-guard")
+    const planError = await requirePlanFeature(ctx.companyId, "ap_vendor_invoicing")
+    if (planError) return { error: planError, data: null }
+
     const payload = {
       company_id: ctx.companyId,
       vendor_id: sanitizeString(input.vendor_id, 80),
