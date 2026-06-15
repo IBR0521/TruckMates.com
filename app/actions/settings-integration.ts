@@ -84,6 +84,13 @@ export async function getIntegrationSettings() {
           comdata_enabled: false,
           wex_enabled: false,
           efs_enabled: false,
+          has_comdata_credentials: false,
+          has_wex_credentials: false,
+          has_efs_credentials: false,
+          comdata_api_base_url: "",
+          wex_api_base_url: "",
+          efs_api_base_url: "",
+          fuel_card_last_synced_at: null,
           paypal_enabled: false,
           google_maps_enabled: true, // platform-wide default
           resend_enabled: true, // platform-wide default
@@ -110,10 +117,13 @@ export async function getIntegrationSettings() {
       comdata_enabled?: boolean | null
       wex_enabled?: boolean | null
       efs_enabled?: boolean | null
+      comdata_api_base_url?: string | null
       comdata_api_key?: string | null
       comdata_api_secret?: string | null
+      wex_api_base_url?: string | null
       wex_api_key?: string | null
       wex_api_secret?: string | null
+      efs_api_base_url?: string | null
       efs_api_key?: string | null
       efs_api_secret?: string | null
       fuel_card_last_synced_at?: string | null
