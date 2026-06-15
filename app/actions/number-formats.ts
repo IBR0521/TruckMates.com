@@ -10,7 +10,12 @@ const COMPANY_SETTINGS_SELECT = `
   timezone, date_format, time_format, currency, currency_symbol, default_payment_terms,
   invoice_auto_send, default_load_type, default_carrier_type, auto_create_route,
   default_check_call_interval, check_call_reminder_minutes, require_check_call_at_pickup, require_check_call_at_delivery,
-  auto_attach_bol_to_load, auto_email_bol_to_customer, document_retention_days, bol_auto_generate,
+  auto_attach_bol_to_load, auto_email_bol_to_customer, document_retention_days, bol_auto_generate, bol_template,
+  invoice_email_template,
+  company_logo_url, company_name_display, company_tagline, company_website,
+  company_primary_color, company_secondary_color, number_format,
+  tax_id, license_number, mc_number,
+  business_phone, business_email, business_address, business_city, business_state, business_zip, business_country,
   odometer_validation_enabled, max_odometer_increase_per_day, odometer_auto_sync_from_eld,
   owner_name, dba_name, ein_number, business_type,
   dot_number,
@@ -168,6 +173,25 @@ export async function updateCompanySettings(settings: {
   auto_email_bol_to_customer?: boolean
   document_retention_days?: number
   bol_auto_generate?: boolean
+  bol_template?: string
+  invoice_email_template?: string
+  company_logo_url?: string
+  company_name_display?: string
+  company_tagline?: string
+  company_website?: string
+  company_primary_color?: string
+  company_secondary_color?: string
+  number_format?: string
+  tax_id?: string
+  license_number?: string
+  mc_number?: string
+  business_phone?: string
+  business_email?: string
+  business_address?: string
+  business_city?: string
+  business_state?: string
+  business_zip?: string
+  business_country?: string
   odometer_validation_enabled?: boolean
   max_odometer_increase_per_day?: number
   odometer_auto_sync_from_eld?: boolean
@@ -315,7 +339,12 @@ export async function updateCompanySettings(settings: {
     'invoice_auto_send', 'default_load_type', 'default_carrier_type', 'auto_create_route',
     'default_check_call_interval', 'check_call_reminder_minutes', 'require_check_call_at_pickup',
     'require_check_call_at_delivery', 'auto_attach_bol_to_load', 'auto_email_bol_to_customer',
-    'document_retention_days', 'bol_auto_generate', 'odometer_validation_enabled',
+    'document_retention_days', 'bol_auto_generate', 'bol_template', 'invoice_email_template',
+    'company_logo_url', 'company_name_display', 'company_tagline', 'company_website',
+    'company_primary_color', 'company_secondary_color', 'number_format',
+    'tax_id', 'license_number', 'mc_number',
+    'business_phone', 'business_email', 'business_address', 'business_city', 'business_state', 'business_zip', 'business_country',
+    'odometer_validation_enabled',
     'max_odometer_increase_per_day', 'odometer_auto_sync_from_eld', 'owner_name', 'dba_name',
     'ein_number', 'business_type', 'dot_number', 'load_charge_type', 'miles_calculation_method',
     'fuel_surcharge_method', 'fuel_surcharge_flat_amount', 'fuel_surcharge_per_mile', 'fsc_base_price', 'fsc_mpg_assumed', 'per_diem_rate',

@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import type { AutomationLevel } from "@/lib/ai/types"
 import type { AutomationConfig, AutomationLog, PendingApproval } from "@/lib/ai/agent/types"
+import { requirePlanFeature } from "@/lib/plan-feature-guard"
 
 type DefaultAutomationConfig = {
   level: AutomationLevel
@@ -194,6 +195,11 @@ export async function updateAutomationConfig(
     const role = mapLegacyRole(ctx.user.role)
     if (!MANAGER_ROLES.has(role)) {
       return { error: "Only super admins and operations managers can modify automation settings" }
+    }
+
+    const planError = await requirePlanFeature(companyId, "ai_autonomous_agent")
+    if (planError) {
+      return { error: planError }
     }
 
     const fallback = buildDefaultConfig(companyId, automationType)

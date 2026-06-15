@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { getUserRole } from "@/lib/server-permissions"
+import { type EmployeeRole } from "@/lib/roles"
 import crypto from "crypto"
 import * as Sentry from "@sentry/nextjs"
 /** Matches `webhooks` in supabase/webhooks_schema.sql */
@@ -32,6 +34,16 @@ export type WebhookEventType =
   | "document.uploaded"
   | "document.expiring"
   | "document.expired"
+
+const WEBHOOK_ADMIN_ROLES: readonly EmployeeRole[] = ["super_admin"]
+
+async function requireWebhookAdmin() {
+  const role = await getUserRole()
+  if (!role || !WEBHOOK_ADMIN_ROLES.includes(role)) {
+    return { error: "Only super admins can manage webhooks" }
+  }
+  return { error: null }
+}
 
 // Get all webhooks for company
 export async function getWebhooks() {
@@ -107,6 +119,11 @@ export async function createWebhook(formData: {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const adminCheck = await requireWebhookAdmin()
+  if (adminCheck.error) {
+    return { error: adminCheck.error, data: null }
   }
 
   // Validate URL format and security (SSRF protection)
@@ -206,6 +223,11 @@ export async function updateWebhook(
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
+  const adminCheck = await requireWebhookAdmin()
+  if (adminCheck.error) {
+    return { error: adminCheck.error, data: null }
+  }
+
   // Check if webhook exists
   const { data: existing, error: existingError } = await supabase
     .from("webhooks")
@@ -281,6 +303,11 @@ export async function deleteWebhook(id: string) {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const adminCheck = await requireWebhookAdmin()
+  if (adminCheck.error) {
+    return { error: adminCheck.error, data: null }
   }
 
   const { error } = await supabase
@@ -528,6 +555,11 @@ export async function retryWebhookDelivery(deliveryId: string) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
+  const adminCheck = await requireWebhookAdmin()
+  if (adminCheck.error) {
+    return { error: adminCheck.error, data: null }
+  }
+
   // Get delivery record
   const { data: delivery, error: deliveryError } = await supabase
     .from("webhook_deliveries")
@@ -585,6 +617,11 @@ export async function testWebhook(webhookId: string) {
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const adminCheck = await requireWebhookAdmin()
+  if (adminCheck.error) {
+    return { error: adminCheck.error, data: null }
   }
 
   // Verify webhook belongs to company

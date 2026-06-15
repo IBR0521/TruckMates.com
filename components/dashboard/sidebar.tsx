@@ -592,6 +592,8 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
                   isCollapsed={shouldShowCollapsed}
                 >
                   <NavItem href="/dashboard/reports" label="All reports" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/reports/revenue" label="Revenue" isSubitem isCollapsed={shouldShowCollapsed} />
+                  <NavItem href="/dashboard/reports/ar-aging" label="AR Aging" isSubitem isCollapsed={shouldShowCollapsed} />
                   <NavItem
                     href="/dashboard/reports/detention"
                     label="Detention Report"
@@ -657,6 +659,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               <NavItem href="/dashboard/settings/business" label="Business" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/year-end" label="Year-End" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/alerts" label="Alerts" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/reminder" label="Reminders" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/audit-logs" label="Audit Logs" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/webhooks" label="Webhooks" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/multi-terminal" label="Multi-terminal" planBadge="Fleet" isSubitem isCollapsed={shouldShowCollapsed} />

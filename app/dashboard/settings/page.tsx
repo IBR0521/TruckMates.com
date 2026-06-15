@@ -71,10 +71,6 @@ export default function SettingsPage() {
     maintenance_alerts: true,
     payment_reminders: true,
   })
-  const [securitySettings, setSecuritySettings] = useState({
-    twoFactor: false,
-    sessionTimeout: "30",
-  })
   const [emailConfig, setEmailConfig] = useState<{
     configured: boolean
     fromEmail: string
@@ -659,51 +655,38 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          {/* Security Settings */}
+          {/* Security Settings — per-user controls live under Account settings */}
           <Card className="border-border p-6">
             <div className="flex items-center gap-3 mb-6">
               <Shield className="w-5 h-5 text-primary" />
               <h2 className="text-xl font-bold text-foreground">Security Settings</h2>
             </div>
-            <div className="space-y-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Company-wide two-factor authentication and session timeout are not configurable here yet.
+              Each user can change their password and manage account security under{" "}
+              <a href="/dashboard/settings/account" className="text-primary underline">
+                My account
+              </a>
+              .
+            </p>
+            <div className="space-y-4 opacity-60 pointer-events-none">
               <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-lg">
                 <div>
                   <p className="text-foreground font-medium">Two-Factor Authentication</p>
-                  <p className="text-sm text-muted-foreground">Add an extra layer of security to your account</p>
+                  <p className="text-sm text-muted-foreground">Coming soon — managed per user</p>
                 </div>
-                <Switch
-                  checked={securitySettings.twoFactor}
-                  onCheckedChange={(checked) => 
-                    setSecuritySettings({ ...securitySettings, twoFactor: checked })
-                  }
-                />
+                <Switch checked={false} disabled />
               </div>
               <div className="p-4 bg-secondary/50 rounded-lg">
                 <Label htmlFor="session-timeout">Session Timeout (minutes)</Label>
                 <Input
                   id="session-timeout"
                   type="number"
-                  min="5"
-                  max="480"
-                  value={securitySettings.sessionTimeout}
-                  onChange={(e) => setSecuritySettings({ ...securitySettings, sessionTimeout: e.target.value })}
+                  value="60"
+                  disabled
                   className="mt-2 max-w-xs"
                 />
-                <p className="text-xs text-muted-foreground mt-1">Automatically log out after inactivity</p>
               </div>
-              <div className="pt-4">
-                <Button variant="outline" className="text-red-400 border-red-400 hover:bg-red-400/10">
-                  <Lock className="w-4 h-4 mr-2" />
-                  Change Password
-                </Button>
-              </div>
-              <Button 
-                onClick={() => toast.success("Security settings saved")}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                <Save className="w-4 h-4 mr-2" />
-                Save Security Settings
-              </Button>
             </div>
           </Card>
 

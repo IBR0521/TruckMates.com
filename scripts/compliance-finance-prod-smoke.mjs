@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * Compliance & Finance production smoke test.
+ * Compliance & Finance production smoke test (Playwright).
+ * Uses live site + demo auth (hits real Supabase).
+ *
  *   PLAYWRIGHT_BASE_URL=https://www.truckmateslogistic.com PLAYWRIGHT_AUTH=demo node scripts/compliance-finance-prod-smoke.mjs
  */
 
@@ -9,16 +11,28 @@ import { chromium } from "playwright"
 const baseURL = (process.env.PLAYWRIGHT_BASE_URL || "https://www.truckmateslogistic.com").replace(/\/$/, "")
 const authMode = (process.env.PLAYWRIGHT_AUTH || "demo").toLowerCase()
 
-const PATHS = [
+const COMPLIANCE_FINANCE_PATHS = [
+  // Compliance
   "/dashboard/compliance",
   "/dashboard/dvir",
   "/dashboard/ifta",
+  "/dashboard/permits",
+  "/dashboard/hazmat",
+  "/dashboard/edi",
+  // Finance
   "/dashboard/accounting/invoices",
   "/dashboard/accounting/settlements",
+  "/dashboard/accounting/tax-fuel",
+  "/dashboard/payables/vendor-invoices",
+  "/dashboard/payables/reconcile",
+  "/dashboard/billing/detention-candidates",
+  // Settings
   "/dashboard/settings/invoice",
   "/dashboard/settings/compliance",
   "/dashboard/settings/factoring",
-  "/dashboard/payables/vendor-invoices",
+  "/dashboard/settings/pay-rules",
+  "/dashboard/settings/year-end",
+  "/dashboard/settings/integration",
 ]
 
 function fullUrl(pathname) {
@@ -31,30 +45,86 @@ async function authenticate(page) {
     await page.waitForURL((url) => url.pathname.startsWith("/dashboard"), { timeout: 180_000 })
     return
   }
-  throw new Error("Only demo auth supported for smoke script")
+  const email = process.env.PLAYWRIGHT_EMAIL
+  const password = process.env.PLAYWRIGHT_PASSWORD
+  if (!email || !password) {
+    throw new Error("PLAYWRIGHT_EMAIL and PLAYWRIGHT_PASSWORD required for login mode")
+  }
+  await page.goto(fullUrl("/login"), { waitUntil: "domcontentloaded", timeout: 60_000 })
+  await page.locator('input[type="email"]').fill(email)
+  await page.locator('input[type="password"]').fill(password)
+  await page.getByRole("button", { name: /sign in/i }).click()
+  await page.waitForURL((url) => url.pathname.startsWith("/dashboard"), { timeout: 90_000 })
 }
 
 const results = []
 
-console.log(`\n=== Compliance & Finance Prod Smoke (${baseURL}) ===\n`)
+async function visit(page, pathname) {
+  const consoleErrors = []
+  const pageErrors = []
+  const onConsole = (msg) => {
+    if (msg.type() === "error") consoleErrors.push(msg.text())
+  }
+  const onPageError = (err) => pageErrors.push(String(err))
+  page.on("console", onConsole)
+  page.on("pageerror", onPageError)
+
+  let ok = true
+  let status = null
+  const started = Date.now()
+  try {
+    const res = await page.goto(fullUrl(pathname), { waitUntil: "domcontentloaded", timeout: 90_000 })
+    status = res?.status() ?? null
+    if (status != null && status >= 400) ok = false
+    await page.waitForTimeout(2500)
+    const bodyText = await page.locator("body").innerText({ timeout: 10_000 }).catch(() => "")
+    if (/internal server error|application error|something went wrong/i.test(bodyText)) ok = false
+    if (/company_settings table does not exist|column .* does not exist/i.test(bodyText)) ok = false
+    const fatal = [...consoleErrors, ...pageErrors].filter(
+      (e) =>
+        /reading 'call'|webpack-runtime|company_settings table does not exist|column .* does not exist|hydration failed/i.test(
+          e,
+        ) && !/preload but not used/i.test(e),
+    )
+    if (fatal.length) ok = false
+    results.push({
+      pathname,
+      ok,
+      status,
+      ms: Date.now() - started,
+      fatal,
+      consoleErrors: consoleErrors.slice(0, 3),
+    })
+  } catch (e) {
+    results.push({
+      pathname,
+      ok: false,
+      status,
+      ms: Date.now() - started,
+      fatal: [String(e)],
+      consoleErrors: [],
+    })
+  } finally {
+    page.off("console", onConsole)
+    page.off("pageerror", onPageError)
+  }
+}
+
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage()
 try {
+  console.log(`\n=== Compliance & Finance Production Smoke (${baseURL}) ===\n`)
   await authenticate(page)
-  for (const path of PATHS) {
-    const started = Date.now()
-    let ok = true
-    try {
-      const res = await page.goto(fullUrl(path), { waitUntil: "domcontentloaded", timeout: 90_000 })
-      if ((res?.status() ?? 0) >= 400) ok = false
-      await page.waitForTimeout(2000)
-      const body = await page.locator("body").innerText()
-      if (/internal server error|application error/i.test(body)) ok = false
-    } catch {
-      ok = false
+  console.log(`Authenticated via ${authMode} → ${page.url()}\n`)
+  for (const path of COMPLIANCE_FINANCE_PATHS) {
+    process.stdout.write(`  ${path} ... `)
+    await visit(page, path)
+    const r = results[results.length - 1]
+    console.log(r.ok ? `OK (${r.ms}ms)` : `FAIL (${r.ms}ms)`)
+    if (!r.ok) {
+      if (r.fatal?.length) console.log(`    ${r.fatal[0]}`)
+      if (r.consoleErrors?.length) console.log(`    console: ${r.consoleErrors[0]}`)
     }
-    results.push({ path, ok, ms: Date.now() - started })
-    console.log(`  ${path} ... ${ok ? "OK" : "FAIL"} (${results[results.length - 1].ms}ms)`)
   }
 } finally {
   await browser.close()

@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import crypto from "crypto"
-import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
+import { requirePlanFeature } from "@/lib/plan-feature-guard"
+import { checkFeatureAccess } from "@/lib/plan-enforcement"
 /**
  * Generate a secure API key
  */
@@ -20,13 +21,17 @@ function generateAPIKey(): { key: string; hash: string; prefix: string } {
 }
 
 export async function getAPIKeysAccessStatus() {
-  const gate = await getCurrentCompanyFeatureAccess("api_keys")
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId) {
+    return { data: { allowed: false, plan_name: null }, error: ctx.error || "Not authenticated" }
+  }
+  const gate = await checkFeatureAccess({ companyId: ctx.companyId, feature: "public_api" })
   return {
     data: {
       allowed: gate.allowed,
-      plan_name: gate.planName,
+      plan_name: gate.currentTier,
     },
-    error: gate.error,
+    error: null,
   }
 }
 
@@ -39,12 +44,12 @@ export async function getAPIKeys() {
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
-  const gate = await getCurrentCompanyFeatureAccess("api_keys")
-  if (!gate.allowed) {
+  const planError = await requirePlanFeature(ctx.companyId, "public_api")
+  if (planError) {
     return {
       error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
       data: null,
-      upgrade: { required: true, feature: "api_keys" },
+      upgrade: { required: true, feature: "public_api" },
     }
   }
 
@@ -78,12 +83,12 @@ export async function createAPIKey(formData: {
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
-  const gate = await getCurrentCompanyFeatureAccess("api_keys")
-  if (!gate.allowed) {
+  const planError = await requirePlanFeature(ctx.companyId, "public_api")
+  if (planError) {
     return {
       error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
       data: null,
-      upgrade: { required: true, feature: "api_keys" },
+      upgrade: { required: true, feature: "public_api" },
     }
   }
 
@@ -138,11 +143,11 @@ export async function revokeAPIKey(id: string) {
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated" }
   }
-  const gate = await getCurrentCompanyFeatureAccess("api_keys")
-  if (!gate.allowed) {
+  const planError = await requirePlanFeature(ctx.companyId, "public_api")
+  if (planError) {
     return {
       error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
-      upgrade: { required: true, feature: "api_keys" },
+      upgrade: { required: true, feature: "public_api" },
     }
   }
 
@@ -198,12 +203,12 @@ export async function updateAPIKey(
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
-  const gate = await getCurrentCompanyFeatureAccess("api_keys")
-  if (!gate.allowed) {
+  const planError = await requirePlanFeature(ctx.companyId, "public_api")
+  if (planError) {
     return {
       error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
       data: null,
-      upgrade: { required: true, feature: "api_keys" },
+      upgrade: { required: true, feature: "public_api" },
     }
   }
 
@@ -260,8 +265,8 @@ export async function getAPIKeyUsage(apiKeyId: string, days: number = 7) {
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
   }
-  const gate = await getCurrentCompanyFeatureAccess("api_keys")
-  if (!gate.allowed) {
+  const planError = await requirePlanFeature(ctx.companyId, "public_api")
+  if (planError) {
     return {
       error: "API keys are available on Fleet and Enterprise plans. Please upgrade to continue.",
       data: null,

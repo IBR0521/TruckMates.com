@@ -407,11 +407,12 @@ export async function inviteUser(data: {
       company_id: ctx.companyId,
       email: data.email.toLowerCase(),
       invitation_code: invitationCode,
+      invited_role: data.role,
       created_by: ctx.userId!,
       status: "pending",
       expires_at: expiresAt.toISOString(),
     })
-    .select("id, invitation_code, email, expires_at")
+    .select("id, invitation_code, email, expires_at, invited_role")
     .single()
 
   if (inviteError) {
@@ -648,7 +649,7 @@ async function reconcileInvitationsWithExistingUsers(companyId: string) {
 
     const { data: pending, error: pendingError } = await admin
       .from("invitation_codes")
-      .select("id, email")
+      .select("id, email, invited_role")
       .eq("company_id", companyId)
       .eq("status", "pending")
 
@@ -674,11 +675,15 @@ async function reconcileInvitationsWithExistingUsers(companyId: string) {
         if (cid === companyId) {
           acceptorId = profile.id
         } else if (cid == null) {
+          const invitedRole = mapLegacyRole(
+            String((inv as { invited_role?: string | null }).invited_role || profile?.role || "driver"),
+          )
           const { error: attachErr } = await admin
             .from("users")
             .update({
               company_id: companyId,
               employee_status: "active",
+              role: invitedRole,
             })
             .eq("id", profile.id)
           if (!attachErr) acceptorId = profile.id
@@ -696,7 +701,10 @@ async function reconcileInvitationsWithExistingUsers(companyId: string) {
         if (authUser?.id) {
           const meta = authUser.user_metadata
           const rawRole =
-            (meta.employee_role as string) || (meta.role as string) || "driver"
+            (inv as { invited_role?: string | null }).invited_role ||
+            (meta.employee_role as string) ||
+            (meta.role as string) ||
+            "driver"
           const role = mapLegacyRole(String(rawRole).trim().toLowerCase())
           const fullName =
             (meta.full_name as string)?.trim() ||
@@ -798,7 +806,7 @@ export async function getPendingInvitations() {
 
   const { data: invitations, error } = await supabase
     .from("invitation_codes")
-    .select("id, email, invitation_code, status, created_at, expires_at, accepted_at")
+    .select("id, email, invitation_code, invited_role, status, created_at, expires_at, accepted_at")
     .eq("company_id", ctx.companyId)
     .order("created_at", { ascending: false })
 

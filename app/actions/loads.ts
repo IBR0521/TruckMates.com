@@ -1105,6 +1105,13 @@ export async function createLoad(formData: {
     })
   }
   
+  try {
+    const { maybeAutoCreateBOLForLoad } = await import("./auto-bol")
+    await maybeAutoCreateBOLForLoad(data.id, ctx.companyId)
+  } catch (error) {
+    Sentry.captureException(error)
+  }
+
   return { data, error: null, warning: loadQuotaWarning }
 }
 
@@ -1501,6 +1508,16 @@ export async function updateLoad(
       console.error("[Agent]", err)
       Sentry.captureException(err, { tags: { source: "agent", file: "loads.ts" } })
     })
+  }
+
+  // Opt-in: draft invoice when load is marked delivered (never auto-sent)
+  if (data && ((!wasConfirmed && willBeConfirmed) || (formData.status === "scheduled" && currentLoad?.status !== "scheduled"))) {
+    try {
+      const { maybeAutoCreateBOLForLoad } = await import("./auto-bol")
+      await maybeAutoCreateBOLForLoad(id, ctx.companyId)
+    } catch (error) {
+      Sentry.captureException(error)
+    }
   }
 
   // Opt-in: draft invoice when load is marked delivered (never auto-sent)

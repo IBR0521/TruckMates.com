@@ -8,18 +8,12 @@ import { processComplianceRegistrationExpiryAlerts } from "@/app/actions/complia
 // Can be called by Vercel Cron or external cron service
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization")
+  const vercelCronHeader = request.headers.get("x-vercel-cron")
   const cronSecret = process.env.CRON_SECRET
 
-  // SECURITY: Fail-closed - require CRON_SECRET if set
-  if (!cronSecret) {
-    console.error("[Cron Alert Escalations] CRON_SECRET not configured - endpoint disabled")
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401 }
-    )
-  }
-
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  const isAuthorizedBySecret = !!cronSecret && authHeader === `Bearer ${cronSecret}`
+  const isAuthorizedByVercelCron = !!vercelCronHeader
+  if (!isAuthorizedBySecret && !isAuthorizedByVercelCron) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

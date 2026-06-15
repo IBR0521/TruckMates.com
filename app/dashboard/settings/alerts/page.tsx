@@ -21,7 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { getAlertRules, createAlertRule, updateAlertRule, deleteAlertRule } from "@/app/actions/alerts"
-// import { getUsers } from "@/app/actions/user" // Will be implemented later
+import { getCompanyUsers } from "@/app/actions/settings-users"
 import { Bell, Plus, Trash2, Edit2, Save } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -37,6 +37,7 @@ type AlertConditions = {
 
 function AlertsTabContent() {
   const [alertRules, setAlertRules] = useState<AlertRule[]>([])
+  const [companyUsers, setCompanyUsers] = useState<Array<{ id: string; full_name?: string | null; email?: string | null }>>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -64,10 +65,13 @@ function AlertsTabContent() {
   async function loadData() {
     setIsLoading(true)
     try {
-      const rulesResult = await getAlertRules()
+      const [rulesResult, usersResult] = await Promise.all([getAlertRules(), getCompanyUsers()])
 
       if (rulesResult.data) {
         setAlertRules(rulesResult.data)
+      }
+      if (usersResult.data) {
+        setCompanyUsers(usersResult.data as Array<{ id: string; full_name?: string | null; email?: string | null }>)
       }
     } catch (error: unknown) {
       toast.error("Failed to load alert rules")
@@ -372,6 +376,30 @@ function AlertsTabContent() {
                   />
                 </div>
               </div>
+
+              {companyUsers.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Notify specific users (optional)</Label>
+                  <p className="text-xs text-muted-foreground">Leave empty to notify all managers.</p>
+                  <div className="grid gap-2 max-h-40 overflow-y-auto border rounded-md p-3">
+                    {companyUsers.map((user) => (
+                      <label key={user.id} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={formData.notify_users.includes(user.id)}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...formData.notify_users, user.id]
+                              : formData.notify_users.filter((id) => id !== user.id)
+                            setFormData({ ...formData, notify_users: next })
+                          }}
+                        />
+                        <span>{user.full_name || user.email || user.id}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* FIXED: Add escalation fields */}
               <div className="space-y-2">

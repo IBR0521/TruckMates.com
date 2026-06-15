@@ -8,6 +8,7 @@ import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkCreatePermission, checkDeletePermission, checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
 import { revalidatePath } from "next/cache"
 import { sanitizeString } from "@/lib/validation"
+import { requirePlanFeature } from "@/lib/plan-feature-guard"
 export async function getTerminals() {
   try {
     const supabase = await createClient()
@@ -36,6 +37,9 @@ export async function createTerminal(input: { name: string; address?: string; ti
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
 
+    const planError = await requirePlanFeature(ctx.companyId, "multi_terminal")
+    if (planError) return { error: planError, data: null }
+
     const payload = {
       company_id: ctx.companyId,
       name: sanitizeString(input.name, 120).trim(),
@@ -53,6 +57,7 @@ export async function createTerminal(input: { name: string; address?: string; ti
     if (error) return { error: safeDbError(error), data: null }
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/reports")
+    revalidatePath("/dashboard/settings/multi-terminal")
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
@@ -67,6 +72,9 @@ export async function updateTerminal(id: string, input: { name?: string; address
     const supabase = await createClient()
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
+
+    const planError = await requirePlanFeature(ctx.companyId, "multi_terminal")
+    if (planError) return { error: planError, data: null }
 
     const payload: Record<string, string | null> = {}
     if (input.name !== undefined) payload.name = sanitizeString(input.name, 120).trim() || null
@@ -84,6 +92,7 @@ export async function updateTerminal(id: string, input: { name?: string; address
     if (error) return { error: safeDbError(error), data: null }
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/reports")
+    revalidatePath("/dashboard/settings/multi-terminal")
     return { data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
@@ -98,6 +107,9 @@ export async function deleteTerminal(id: string) {
     const supabase = await createClient()
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.companyId) return { error: ctx.error || "Not authenticated", data: null }
+
+    const planError = await requirePlanFeature(ctx.companyId, "multi_terminal")
+    if (planError) return { error: planError, data: null }
 
     // detach references first
     await Promise.all([
@@ -114,6 +126,7 @@ export async function deleteTerminal(id: string) {
     if (error) return { error: safeDbError(error), data: null }
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/reports")
+    revalidatePath("/dashboard/settings/multi-terminal")
     return { data: { success: true }, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)

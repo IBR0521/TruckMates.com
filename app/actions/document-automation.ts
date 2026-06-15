@@ -146,7 +146,7 @@ export async function updateDocumentTemplates(templates: {
     return { error: safeDbError(error), data: null }
   }
 
-  revalidatePath("/dashboard/settings/documents")
+  revalidatePath("/dashboard/settings/business")
   return { data, error: null }
 }
 

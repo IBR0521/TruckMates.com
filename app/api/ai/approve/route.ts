@@ -6,6 +6,8 @@ import { resolveApproval } from "@/lib/ai/agent/settings"
 import { extractPreferenceEntityId, recordActionPreference } from "@/lib/ai/context"
 import type { AgentAction } from "@/lib/ai/types"
 import { rateLimitRedis, retryAfterFromReset } from "@/lib/rate-limit-redis"
+import { mapLegacyRole } from "@/lib/roles"
+import { requirePlanFeature } from "@/lib/plan-feature-guard"
 
 function toRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -52,6 +54,16 @@ export async function POST(request: NextRequest) {
     const ctx = await getCachedAuthContext()
     if (ctx.error || !ctx.userId || !ctx.companyId) {
       return NextResponse.json({ success: false, error: ctx.error || "Not authenticated" }, { status: 401 })
+    }
+
+    const role = mapLegacyRole(ctx.user?.role)
+    if (role !== "super_admin" && role !== "operations_manager") {
+      return NextResponse.json({ success: false, error: "Only managers can approve AI actions" }, { status: 403 })
+    }
+
+    const planError = await requirePlanFeature(ctx.companyId, "ai_autonomous_agent")
+    if (planError) {
+      return NextResponse.json({ success: false, error: planError }, { status: 403 })
     }
 
     const approveRl = await rateLimitRedis(`ai_approve:${ctx.companyId}`, { limit: 30, window: 60 })

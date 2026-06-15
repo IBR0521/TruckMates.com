@@ -4,8 +4,12 @@ import { errorMessage } from "@/lib/error-message"
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization")
+  const vercelCronHeader = request.headers.get("x-vercel-cron")
   const cronSecret = process.env.CRON_SECRET
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+
+  const isAuthorizedBySecret = !!cronSecret && authHeader === `Bearer ${cronSecret}`
+  const isAuthorizedByVercelCron = !!vercelCronHeader
+  if (!isAuthorizedBySecret && !isAuthorizedByVercelCron) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

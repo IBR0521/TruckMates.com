@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { mapLegacyRole } from '@/lib/roles'
 import { canViewFeature, type FeatureCategory } from '@/lib/feature-permissions'
+import { hasFeatureAccess, normalizePlanTier } from '@/lib/plan-limits'
 
 /** Avoid hanging forever when Supabase is unreachable or misconfigured (browser spinner on /dashboard/*). */
 const SUPABASE_MIDDLEWARE_FETCH_MS = 12_000
@@ -149,6 +150,7 @@ const DASHBOARD_ROUTE_FEATURES: Array<{ pattern: RegExp; feature: FeatureCategor
   { pattern: /^\/dashboard\/notifications(\/|$)/, feature: 'alerts' },
   { pattern: /^\/dashboard\/reminders(\/|$)/, feature: 'reminders' },
   { pattern: /^\/dashboard\/settings\/users(\/|$)/, feature: 'employees' },
+  { pattern: /^\/dashboard\/settings\/ai-automation(\/|$)/, feature: 'dashboard' },
   { pattern: /^\/dashboard\/settings(\/|$)/, feature: 'settings' },
   { pattern: /^\/dashboard\/marketplace(\/|$)/, feature: 'marketplace' },
   { pattern: /^\/dashboard\/fuel-analytics(\/|$)/, feature: 'fuel_analytics' },
@@ -163,16 +165,17 @@ function featureForDashboardPath(pathname: string): FeatureCategory | null {
   return null
 }
 
-function hasPlanFeature(planName: string, feature: 'route_optimization' | 'geofencing' | 'crm' | 'api_keys'): boolean {
+function hasPlanFeature(planName: string, feature: 'route_optimization' | 'geofencing' | 'crm' | 'api_keys' | 'detention_report'): boolean {
   const plan = planName.toLowerCase()
   if (plan === 'enterprise' || plan === 'professional') return true
   return false
 }
 
-function requiredPlanFeatureForPath(pathname: string): 'route_optimization' | 'geofencing' | 'crm' | 'api_keys' | null {
+function requiredPlanFeatureForPath(pathname: string): 'route_optimization' | 'geofencing' | 'crm' | 'api_keys' | 'detention_report' | null {
   if (/^\/dashboard\/routes\/optimize(\/|$)/.test(pathname)) return 'route_optimization'
   if (/^\/dashboard\/geofencing(\/|$)/.test(pathname)) return 'geofencing'
   if (/^\/dashboard\/crm(\/|$)/.test(pathname)) return 'crm'
+  if (/^\/dashboard\/reports\/detention(\/|$)/.test(pathname)) return 'detention_report'
   if (/^\/dashboard\/settings\/api-keys(\/|$)/.test(pathname)) return 'api_keys'
   return null
 }
@@ -287,7 +290,7 @@ export async function middleware(request: NextRequest) {
       if (profile?.company_id) {
         const { data: company } = await supabase
           .from('companies')
-          .select('setup_complete, setup_data, name')
+          .select('setup_complete, setup_data, name, subscription_tier')
           .eq('id', profile.company_id)
           .maybeSingle()
 
@@ -372,11 +375,20 @@ export async function middleware(request: NextRequest) {
             (status === 'active' || (status === 'trialing' && !trialExpired))
 
           const requiredPlanFeature = requiredPlanFeatureForPath(pathname)
-          if (requiredPlanFeature && !hasPlanFeature(planName, requiredPlanFeature)) {
-            const url = request.nextUrl.clone()
-            url.pathname = '/dashboard/settings/billing'
-            url.searchParams.set('upgrade', requiredPlanFeature)
-            return NextResponse.redirect(url)
+          if (requiredPlanFeature) {
+            const companyTier = normalizePlanTier(
+              (company as { subscription_tier?: string | null } | null)?.subscription_tier ?? planName,
+            )
+            const planAllowed =
+              requiredPlanFeature === 'api_keys'
+                ? hasFeatureAccess(companyTier, 'public_api')
+                : hasPlanFeature(planName, requiredPlanFeature)
+            if (!planAllowed) {
+              const url = request.nextUrl.clone()
+              url.pathname = '/dashboard/settings/billing'
+              url.searchParams.set('upgrade', requiredPlanFeature === 'api_keys' ? 'public_api' : requiredPlanFeature)
+              return NextResponse.redirect(url)
+            }
           }
 
           if (!hasSubscriptionAccess && !isBillingActivationRoute) {

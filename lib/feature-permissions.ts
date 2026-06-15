@@ -77,6 +77,8 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
       "reports",
       "alerts",
       "reminders",
+      "fuel_analytics",
+      "employees",
     ],
     create: [
       "drivers",
@@ -91,6 +93,7 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
       "documents",
       "alerts",
       "reminders",
+      "employees",
     ],
     edit: [
       "drivers",
@@ -102,6 +105,7 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
       "address_book",
       "crm",
       "bol",
+      "employees",
     ],
     delete: [
       "routes",
@@ -117,6 +121,7 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
       "marketplace",
       "yard_management",
       "crm",
+      "employees",
     ],
   },
 
@@ -168,6 +173,7 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
       "reports",
       "alerts",
       "reminders",
+      "fuel_analytics",
     ],
     create: [
       "eld",
@@ -204,6 +210,7 @@ export const ROLE_FEATURE_PERMISSIONS: Record<EmployeeRole, {
       "reports",
       "documents",
       "loads", // Only delivered loads not yet invoiced
+      "fuel_analytics",
     ],
     create: [
       "invoicing",

@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { safeDbError } from "@/lib/utils/error"
-import type { EmployeeRole } from "@/lib/roles"
+import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import * as Sentry from "@sentry/nextjs"
 import { headers } from "next/headers"
 import { rateLimitRedis } from "@/lib/rate-limit-redis"
@@ -256,16 +256,17 @@ export async function registerEmployee(data: {
     const supabase = await createClient()
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
 
-    const role = String(data.role).trim().toLowerCase() as EmployeeRole
-
     const ALLOWED_SELF_REGISTER_ROLES: EmployeeRole[] = ["dispatcher", "safety_compliance", "financial_controller", "driver"]
     const ALLOWED_INVITED_REGISTER_ROLES: EmployeeRole[] = [
+      "super_admin",
       "operations_manager",
       "dispatcher",
       "safety_compliance",
       "financial_controller",
       "driver",
     ]
+
+    let role = mapLegacyRole(String(data.role).trim().toLowerCase())
 
     // HIGH FIX: Require invite token for company registration
     let companyId: string | null = null
@@ -276,40 +277,43 @@ export async function registerEmployee(data: {
     )
 
     if (inviteToken) {
-      if (!ALLOWED_INVITED_REGISTER_ROLES.includes(role)) {
-        return {
-          data: null,
-          error: `Invalid invited role: ${role}.`,
-        }
-      }
-
       // Check if it's an invitation code (6-digit or alphanumeric)
-      // First try to find it in invitation_codes table
       const { data: invitation, error: inviteError } = await supabase
         .from("invitation_codes")
-        .select("company_id, email, status, expires_at")
+        .select("company_id, email, status, expires_at, invited_role")
         .eq("invitation_code", inviteToken)
         .eq("status", "pending")
         .gt("expires_at", new Date().toISOString())
         .maybeSingle()
 
       if (!inviteError && invitation) {
-        // Valid invitation code found
         companyId = invitation.company_id
-        
+
+        const storedRole = mapLegacyRole(
+          String((invitation as { invited_role?: string | null }).invited_role || "").trim(),
+        )
+        if ((invitation as { invited_role?: string | null }).invited_role) {
+          role = storedRole
+        }
+
+        if (!ALLOWED_INVITED_REGISTER_ROLES.includes(role)) {
+          return {
+            data: null,
+            error: `Invalid invited role: ${role}.`,
+          }
+        }
+
         // Verify email matches if email was provided in invitation
         if (invitation.email && invitation.email.toLowerCase() !== data.email.toLowerCase()) {
-          return { 
-            data: null, 
-            error: "This invitation was sent to a different email address. Please use the email address the invitation was sent to." 
+          return {
+            data: null,
+            error: "This invitation was sent to a different email address. Please use the email address the invitation was sent to.",
           }
         }
       } else {
-        // BUG-013 FIX: Remove backward compatibility that allows direct company_id UUID
-        // This was a security hole - anyone could register to any company by guessing UUIDs
-        return { 
-          data: null, 
-          error: "Invalid invitation code. Please use a valid invitation link or contact your administrator." 
+        return {
+          data: null,
+          error: "Invalid invitation code. Please use a valid invitation link or contact your administrator.",
         }
       }
     } else {
@@ -319,9 +323,9 @@ export async function registerEmployee(data: {
           error: `You cannot self-register as ${role}. Only ${ALLOWED_SELF_REGISTER_ROLES.join(", ")} roles can self-register.`,
         }
       }
-      return { 
-        data: null, 
-        error: "Invitation code or company ID is required. Please use a valid invitation link." 
+      return {
+        data: null,
+        error: "Invitation code or company ID is required. Please use a valid invitation link.",
       }
     }
 
@@ -481,7 +485,7 @@ export async function registerEmployee(data: {
       data: {
         userId: String(authData.user.id),
         email: String(authData.user.email || ""),
-        role: String(data.role),
+        role: String(role),
       },
       error: null
     }
