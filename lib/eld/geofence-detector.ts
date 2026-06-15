@@ -65,12 +65,19 @@ function toGeofenceRow(row: Record<string, unknown>): GeofenceRow | null {
   }
 }
 
-function geofenceShapeFromRow(row: GeofenceRow & Record<string, unknown>): GeofenceShape {
+function geofenceShapeFromRow(
+  row: GeofenceRow & Record<string, unknown>,
+  defaultRadiusMeters?: number,
+): GeofenceShape {
+  const radius =
+    row.radius_meters != null && Number(row.radius_meters) > 0
+      ? Number(row.radius_meters)
+      : defaultRadiusMeters
   return {
     zone_type: row.zone_type,
     center_latitude: row.center_latitude as number | null | undefined,
     center_longitude: row.center_longitude as number | null | undefined,
-    radius_meters: row.radius_meters as number | null | undefined,
+    radius_meters: radius,
     polygon_coordinates: row.polygon_coordinates as GeofenceShape["polygon_coordinates"],
     north_bound: row.north_bound as number | null | undefined,
     south_bound: row.south_bound as number | null | undefined,
@@ -95,6 +102,24 @@ export async function processGeofenceTelemetryForCompany(companyId: string): Pro
   const nowIso = new Date().toISOString()
 
   try {
+    const { data: companySettings } = await admin
+      .from("company_settings")
+      .select("geofence_enabled, track_driver_location, geofence_radius")
+      .eq("company_id", companyId)
+      .maybeSingle()
+
+    if (companySettings?.track_driver_location === false) {
+      return { processedPoints: 0, error: null }
+    }
+    if (companySettings?.geofence_enabled === false) {
+      return { processedPoints: 0, error: null }
+    }
+
+    const defaultRadiusMeters =
+      typeof companySettings?.geofence_radius === "number" && companySettings.geofence_radius > 0
+        ? Math.round(companySettings.geofence_radius * 1609.34)
+        : undefined
+
     const { data: cursorRow, error: curErr } = await admin
       .from("geofence_detection_cursors")
       .select("id, company_id, last_processed_telemetry_at, last_run_at, consecutive_failures")
@@ -261,7 +286,7 @@ export async function processGeofenceTelemetryForCompany(companyId: string): Pro
           const full = g as GeofenceRow & Record<string, unknown>
           if (!truckAllowedOnGeofence(full, truckId)) continue
 
-          const inside = pointInsideGeofence(p.location_lat, p.location_lng, geofenceShapeFromRow(full))
+          const inside = pointInsideGeofence(p.location_lat, p.location_lng, geofenceShapeFromRow(full, defaultRadiusMeters))
           const key = `${truckId}:${g.id}`
           const st = stateMap.get(key)
 

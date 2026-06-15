@@ -16,11 +16,10 @@ const envConfig: EnvConfig = {
     'NEXT_PUBLIC_SUPABASE_URL',
     'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   ],
-  requiredInProduction: [
+  requiredInProduction: [],
+  optional: [
     'UPSTASH_REDIS_REST_URL',
     'UPSTASH_REDIS_REST_TOKEN',
-  ],
-  optional: [
     'NEXT_PUBLIC_SENTRY_DSN',
     'SENTRY_ORG',
     'SENTRY_PROJECT',
@@ -53,6 +52,13 @@ export function validateEnv(): { valid: boolean; errors: string[]; warnings: str
   }
 
   if (process.env.NODE_ENV === 'production') {
+    for (const key of ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN']) {
+      if (!process.env[key]) {
+        warnings.push(
+          `${key} is not set — API rate limiting falls back to in-memory (not shared across serverless instances).`,
+        )
+      }
+    }
     for (const key of envConfig.requiredInProduction ?? []) {
       if (!process.env[key]) {
         errors.push(`Missing required production environment variable: ${key}`)
@@ -114,13 +120,14 @@ export function validateEnv(): { valid: boolean; errors: string[]; warnings: str
 
 // Validate on module load (server-side only)
 if (typeof window === 'undefined' && process.env.NODE_ENV !== 'test') {
+  const isNextBuild = process.env.NEXT_PHASE === 'phase-production-build'
   const validation = validateEnv()
   
   if (!validation.valid) {
     console.error('❌ Environment validation failed:')
     validation.errors.forEach(error => console.error(`  - ${error}`))
     
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === 'production' && !isNextBuild) {
       throw new Error('Environment validation failed. Please check your environment variables.')
     }
   }

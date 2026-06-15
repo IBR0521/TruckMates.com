@@ -5,6 +5,7 @@ import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getCompanySettings } from "./number-formats"
+import { sendNotification } from "./notifications"
 import { handleDbError } from "@/lib/db-helpers"
 import * as Sentry from "@sentry/nextjs"
 
@@ -135,6 +136,29 @@ export async function createCheckCall(formData: {
     return { error: "Table not available. Please run the SQL schema.", data: null }
   }
 
+  if (data && String(formData.call_type || "").toLowerCase() === "emergency") {
+    const settingsResult = await getCompanySettings()
+    if (settingsResult.data?.auto_notify_on_emergency !== false) {
+      const { createAdminClient } = await import("@/lib/supabase/admin")
+      const admin = createAdminClient()
+      const { data: managers } = await admin
+        .from("users")
+        .select("id")
+        .eq("company_id", ctx.companyId)
+        .in("role", ["super_admin", "operations_manager", "dispatcher"])
+      for (const manager of managers || []) {
+        await sendNotification(manager.id, "load_update", {
+          company_id: ctx.companyId,
+          title: "Emergency check call",
+          message: formData.notes || "An emergency check call was logged and needs immediate attention.",
+          priority: "critical",
+          event: "emergency_check_call",
+          load_id: formData.load_id,
+        })
+      }
+    }
+  }
+
   revalidatePath("/dashboard/dispatches")
   return { data, error: null }
 }
@@ -164,6 +188,13 @@ export async function updateCheckCall(
     return { error: ctx.error || "Not authenticated", data: null }
   }
 
+  const { data: existing } = await supabase
+    .from("check_calls")
+    .select("id, load_id, call_type, driver_status, status")
+    .eq("id", id)
+    .eq("company_id", ctx.companyId)
+    .maybeSingle()
+
   const { data, error } = await supabase
     .from("check_calls")
     .update(updates)
@@ -176,6 +207,27 @@ export async function updateCheckCall(
     const result = handleDbError(error, null)
     if (result.error) return result
     return { error: "Table not available. Please run the SQL schema.", data: null }
+  }
+
+  const becameCompleted =
+    String(updates.status || "").toLowerCase() === "completed" &&
+    String(existing?.status || "").toLowerCase() !== "completed"
+
+  if (becameCompleted && data?.load_id) {
+    const { resolveCheckCallCompletedEvents } = await import("@/lib/check-call-notify-events")
+    const { notifyCustomerBrokerForCheckCallEvent } = await import("./check-call-customer-notify")
+    const events = resolveCheckCallCompletedEvents(
+      String(data.call_type || ""),
+      updates.driver_status ?? data.driver_status,
+    )
+    for (const event of events) {
+      notifyCustomerBrokerForCheckCallEvent(ctx.companyId, data.load_id, event, {
+        location: data.location ?? updates.location,
+        notes: data.notes ?? updates.notes,
+      }).catch((err) => {
+        Sentry.captureException(err)
+      })
+    }
   }
 
   revalidatePath("/dashboard/dispatches")
@@ -222,7 +274,7 @@ export async function scheduleCheckCallsForLoad(loadId: string) {
     company_id: string
     load_id: string
     driver_id: string
-    call_type: "pickup" | "scheduled" | "delivery"
+    call_type: "pickup" | "scheduled" | "delivery" | "milestone"
     scheduled_time: string
     status: "pending"
   }> = []
@@ -259,6 +311,22 @@ export async function scheduleCheckCallsForLoad(loadId: string) {
         status: "pending",
       })
       currentTime.setHours(currentTime.getHours() + intervalHours)
+    }
+
+    if (settings.require_check_call_at_milestones && durationHours > 0) {
+      for (const fraction of [0.25, 0.5, 0.75]) {
+        const milestone = new Date(startTime.getTime() + durationHours * fraction * 60 * 60 * 1000)
+        if (milestone > startTime && milestone < endTime) {
+          checkCalls.push({
+            company_id: ctx.companyId,
+            load_id: loadId,
+            driver_id: load.driver_id,
+            call_type: "milestone",
+            scheduled_time: milestone.toISOString(),
+            status: "pending",
+          })
+        }
+      }
     }
   }
 

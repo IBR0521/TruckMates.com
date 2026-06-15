@@ -8,6 +8,12 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { resolveDriverIdForSessionUser } from "@/lib/auth/resolve-driver-for-session"
 import { createAdminClient } from "@/lib/supabase/admin"
+import {
+  companyAllowsEmail,
+  companyAllowsInApp,
+  companyAllowsPush,
+  companyAllowsSms,
+} from "@/lib/company-notification-channels"
 import { mapLegacyRole } from "@/lib/roles"
 import { getResendClientForCompany } from "@/lib/resend-client"
 import { hasFeatureAccess, normalizePlanTier, type PlanTier } from "@/lib/plan-limits"
@@ -223,7 +229,40 @@ export async function sendNotification(
       break
   }
 
-  const results: { email?: Record<string, unknown>; sms?: Record<string, unknown> } = {}
+  const companyIdForChannels =
+    typeof data.company_id === "string" && data.company_id
+      ? data.company_id
+      : null
+  let companyChannels: unknown = null
+  if (companyIdForChannels) {
+    const { data: companySettings } = await supabase
+      .from("company_settings")
+      .select("notification_channels")
+      .eq("company_id", companyIdForChannels)
+      .maybeSingle()
+    companyChannels = companySettings?.notification_channels
+  } else {
+    const { data: userCompany } = await supabase
+      .from("users")
+      .select("company_id")
+      .eq("id", userId)
+      .maybeSingle()
+    if (userCompany?.company_id) {
+      const { data: companySettings } = await supabase
+        .from("company_settings")
+        .select("notification_channels")
+        .eq("company_id", userCompany.company_id)
+        .maybeSingle()
+      companyChannels = companySettings?.notification_channels
+    }
+  }
+
+  if (companyChannels != null) {
+    if (!companyAllowsEmail(companyChannels)) shouldNotifyEmail = false
+    if (!companyAllowsSms(companyChannels)) shouldNotifySMS = false
+  }
+
+  const results: { email?: Record<string, unknown>; sms?: Record<string, unknown>; push?: Record<string, unknown> } = {}
 
   // Send email notification
   if (shouldNotifyEmail) {
@@ -304,65 +343,104 @@ export async function sendNotification(
 
   // FIXED: Always insert notification record into database for in-app bell and notifications page
   // This ensures email/SMS and in-app UI are connected
+  const allowInApp = companyChannels == null || companyAllowsInApp(companyChannels)
+  const allowPush = companyChannels == null || companyAllowsPush(companyChannels)
+
+  let notificationTitle = "Notification"
+  let notificationMessage = ""
+
+  switch (type) {
+    case "route_update":
+      notificationTitle = `Route Update: ${data.routeName || "Route"}`
+      notificationMessage = data.status ? `Status changed to ${data.status}` : "Route has been updated"
+      break
+    case "load_update":
+      notificationTitle = data.title || `Load Update: ${data.shipmentNumber || "Load"}`
+      notificationMessage =
+        data.message ||
+        (data.status ? `Status changed to ${data.status}` : "Load has been updated")
+      break
+    case "maintenance_alert":
+      notificationTitle = `Maintenance Alert: ${data.truckNumber || "Vehicle"}`
+      notificationMessage = data.serviceType ? `Service required: ${data.serviceType}` : "Maintenance scheduled"
+      break
+    case "payment_reminder":
+      notificationTitle = `Payment Reminder: ${data.driverName || "Driver"}`
+      notificationMessage = data.amount ? `Amount: $${data.amount}` : "Payment reminder"
+      break
+    case "reminder_due":
+      notificationTitle = data.title || "Reminder Due"
+      notificationMessage =
+        data.description || `Reminder: ${data.title || "Task"} is due ${data.due_date ? `on ${data.due_date}` : "soon"}`
+      break
+    case "dfm_matches_found":
+      notificationTitle = "DFM Matches Found"
+      notificationMessage = data.count ? `${data.count} matching loads found` : "New dispatch matching opportunities"
+      break
+    case "marketplace_load_accepted":
+      notificationTitle = "Marketplace Load Accepted"
+      notificationMessage = data.shipmentNumber
+        ? `Load ${data.shipmentNumber} has been accepted`
+        : "Your marketplace load has been accepted"
+      break
+    case "marketplace_new_matching_load":
+      notificationTitle = "New Marketplace Load"
+      notificationMessage = data.shipmentNumber
+        ? `New matching load: ${data.shipmentNumber}`
+        : "New matching load available"
+      break
+    case "morning_digest":
+      notificationTitle = "Morning Operations Digest"
+      notificationMessage = `Loads in transit: ${data.inTransitLoads || 0}, active alerts: ${data.activeAlerts || 0}, overdue invoices: ${data.overdueInvoices || 0}`
+      break
+    case "violation_alert":
+      notificationTitle = data.title || "Driver Violation Alert"
+      notificationMessage = data.message || "A driver violation has been detected and requires attention."
+      break
+  }
+
+  if (allowPush) {
+    try {
+      const { sendPushToUser } = await import("./push-notifications")
+      const pushResult = await sendPushToUser(userId, {
+        title: notificationTitle,
+        body: notificationMessage,
+        data: {
+          link: "/dashboard/notifications",
+          type,
+        },
+      })
+      results.push = pushResult
+    } catch (error: unknown) {
+      Sentry.captureException(error)
+      const reason = error instanceof Error ? errorMessage(error) : "Failed to send push"
+      results.push = { sent: false, reason }
+    }
+  }
+
+  if (!allowInApp) {
+    const pushSent = results.push?.sent === true
+    return {
+      sent: emailSent || smsSent || pushSent,
+      email: results.email,
+      sms: results.sms,
+      push: results.push,
+      reason:
+        emailSent || smsSent || pushSent
+          ? null
+          : "User has disabled this notification type or service not configured",
+    }
+  }
+
   try {
-    // Get user data for notification title/message
     const { data: userData } = await supabase
       .from("users")
       .select("full_name, company_id")
       .eq("id", userId)
       .maybeSingle()
 
-    // Generate notification title and message
-    let notificationTitle = "Notification"
-    let notificationMessage = ""
-    
-    switch (type) {
-      case "route_update":
-        notificationTitle = `Route Update: ${data.routeName || "Route"}`
-        notificationMessage = data.status ? `Status changed to ${data.status}` : "Route has been updated"
-        break
-      case "load_update":
-        notificationTitle = `Load Update: ${data.shipmentNumber || "Load"}`
-        notificationMessage = data.status ? `Status changed to ${data.status}` : "Load has been updated"
-        break
-      case "maintenance_alert":
-        notificationTitle = `Maintenance Alert: ${data.truckNumber || "Vehicle"}`
-        notificationMessage = data.serviceType ? `Service required: ${data.serviceType}` : "Maintenance scheduled"
-        break
-      case "payment_reminder":
-        notificationTitle = `Payment Reminder: ${data.driverName || "Driver"}`
-        notificationMessage = data.amount ? `Amount: $${data.amount}` : "Payment reminder"
-        break
-      case "reminder_due":
-        notificationTitle = data.title || "Reminder Due"
-        notificationMessage = data.description || `Reminder: ${data.title || "Task"} is due ${data.due_date ? `on ${data.due_date}` : "soon"}`
-        break
-      case "dfm_matches_found":
-        notificationTitle = "DFM Matches Found"
-        notificationMessage = data.count ? `${data.count} matching loads found` : "New dispatch matching opportunities"
-        break
-      case "marketplace_load_accepted":
-        notificationTitle = "Marketplace Load Accepted"
-        notificationMessage = data.shipmentNumber ? `Load ${data.shipmentNumber} has been accepted` : "Your marketplace load has been accepted"
-        break
-      case "marketplace_new_matching_load":
-        notificationTitle = "New Marketplace Load"
-        notificationMessage = data.shipmentNumber ? `New matching load: ${data.shipmentNumber}` : "New matching load available"
-        break
-      case "morning_digest":
-        notificationTitle = "Morning Operations Digest"
-        notificationMessage = `Loads in transit: ${data.inTransitLoads || 0}, active alerts: ${data.activeAlerts || 0}, overdue invoices: ${data.overdueInvoices || 0}`
-        break
-      case "violation_alert":
-        notificationTitle = data.title || "Driver Violation Alert"
-        notificationMessage = data.message || "A driver violation has been detected and requires attention."
-        break
-    }
-
-    // Determine priority from data or default to normal
     const priority = data.priority || "normal"
 
-    // Insert in-app row (service role — RLS has no permissive INSERT for JWT roles)
     const admin = createAdminClient()
     const { error: notifError } = await admin.from("notifications").insert({
       user_id: userId,
@@ -376,6 +454,7 @@ export async function sendNotification(
         ...data,
         email_sent: emailSent,
         sms_sent: smsSent,
+        push_sent: results.push?.sent === true,
         email_message_id: results.email?.messageId,
         sms_message_id: results.sms?.messageId,
       },
@@ -383,18 +462,18 @@ export async function sendNotification(
 
     if (notifError) {
       Sentry.captureException(notifError)
-      // Don't fail the entire function if DB insert fails
     }
   } catch (error: unknown) {
     Sentry.captureException(error)
-    // Don't fail the entire function if DB insert fails
   }
 
+  const pushSent = results.push?.sent === true
   return {
-    sent: emailSent || smsSent,
+    sent: emailSent || smsSent || pushSent,
     email: results.email,
     sms: results.sms,
-    reason: emailSent || smsSent ? null : "User has disabled this notification type or service not configured",
+    push: results.push,
+    reason: emailSent || smsSent || pushSent ? null : "User has disabled this notification type or service not configured",
   }
 }
 

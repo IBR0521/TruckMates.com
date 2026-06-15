@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js"
 import { aiPriorityRank, effectiveAiPriority } from "@/lib/notifications/smart-ui"
 import { toast } from "sonner"
+import { useDashboardShell } from "@/components/dashboard/shell-bootstrap-provider"
 
 type RecordWithId = {
   id?: unknown
@@ -255,6 +256,7 @@ export function useRealtimeRecord<T = unknown>(
  * Hook for header bell notifications (unified system notifications + fleet alerts).
  */
 export function useRealtimeNotifications() {
+  const shell = useDashboardShell()
   const [notifications, setNotifications] = useState<NotificationLike[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [unreadCountDegraded, setUnreadCountDegraded] = useState(false)
@@ -338,7 +340,7 @@ export function useRealtimeNotifications() {
     }, 400)
   }, [refreshNotifications])
 
-  // Initial load
+  // Initial load: badge only from shell bootstrap; full feed when popover opens.
   useEffect(() => {
     const loadNotifications = async () => {
       try {
@@ -349,18 +351,29 @@ export function useRealtimeNotifications() {
 
         setUserId(user.id)
 
-        const display = await import("@/app/actions/user-preferences").then((m) => m.getNotificationSmartDisplayState())
+        if (shell.data) {
+          setSmartUi(shell.data.notifications.smartUi)
+          setUnreadCount(shell.data.notifications.unreadCount)
+          setUnreadCountDegraded(shell.data.notifications.unreadCountDegraded)
+          return
+        }
+
+        const display = await import("@/app/actions/user-preferences").then((m) =>
+          m.getNotificationSmartDisplayState(),
+        )
         const ui = display.data?.smartUi ?? false
         setSmartUi(ui)
 
-        await refreshNotifications()
+        await refreshUnreadCount()
       } catch (error) {
         console.log("[NOTIFICATIONS] Failed to load:", error)
       }
     }
 
-    loadNotifications()
-  }, [supabase, refreshNotifications])
+    if (!shell.loading) {
+      void loadNotifications()
+    }
+  }, [supabase, refreshUnreadCount, shell.data, shell.loading])
 
   // Realtime for in-app notifications; alerts are refreshed via scheduleRefresh (no realtime publication).
   useEffect(() => {

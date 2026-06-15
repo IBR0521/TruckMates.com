@@ -13,6 +13,14 @@
       "schedule": "7,22,37,52 * * * *"
     },
     {
+      "path": "/api/cron/scan-delivery-delays",
+      "schedule": "12,42 * * * *"
+    },
+    {
+      "path": "/api/cron/scan-dispatch-events",
+      "schedule": "3,18,33,48 * * * *"
+    },
+    {
       "path": "/api/cron/alert-escalations",
       "schedule": "0 0 * * *"
     },

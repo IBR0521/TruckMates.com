@@ -40,6 +40,7 @@ import {
   updateLoad,
   type BulkLoadSummary,
 } from "@/app/actions/loads"
+import { ensureDispatchConfirmed } from "@/lib/dispatch-confirm-client"
 import { getDrivers } from "@/app/actions/drivers"
 import { getTrucks } from "@/app/actions/trucks"
 import { autoGenerateInvoiceOnPOD } from "@/app/actions/auto-invoice"
@@ -58,6 +59,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { getCompanySettings } from "@/app/actions/number-formats"
+import { formatLoadWeight, type WeightUnit } from "@/lib/format-weight"
 
 type LoadListItem = NonNullable<Awaited<ReturnType<typeof getLoads>>["data"]>[number]
 type LoadDeleteDependency = {
@@ -94,6 +97,16 @@ export default function LoadsPage() {
   const [bulkDrivers, setBulkDrivers] = useState<Array<{ id: string; name: string }>>([])
   const [bulkTrucks, setBulkTrucks] = useState<Array<{ id: string; truck_number: string }>>([])
   const [bulkRunning, setBulkRunning] = useState(false)
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>("lbs")
+
+  useEffect(() => {
+    getCompanySettings()
+      .then((result) => {
+        const unit = result.data?.weight_unit === "kg" ? "kg" : "lbs"
+        setWeightUnit(unit)
+      })
+      .catch(() => {})
+  }, [])
 
   const loadLoads = useCallback(async () => {
     if (!hasLoadedOnce) {
@@ -279,6 +292,7 @@ export default function LoadsPage() {
       toast.error("Select a driver for bulk assignment")
       return
     }
+    if (!(await ensureDispatchConfirmed())) return
     setBulkRunning(true)
     const result = await bulkAssignLoads(
       Array.from(selectedIds),
@@ -687,7 +701,7 @@ export default function LoadsPage() {
                   </div>
                   <div className="space-y-2 text-sm mb-4">
                     <div className="flex items-center gap-2">
-                      <p className="text-foreground">Weight: {load.weight || `${load.weight_kg ? (load.weight_kg / 1000).toFixed(1) : 0} tons`}</p>
+                      <p className="text-foreground">Weight: {formatLoadWeight(load, weightUnit)}</p>
                       {load.delivery_type === "multi" && (
                         <span className="px-2 py-0.5 rounded text-xs font-medium bg-purple-500/20 text-purple-400">
                           {load.total_delivery_points || 0} Delivery Points

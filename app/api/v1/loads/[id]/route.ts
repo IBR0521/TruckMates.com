@@ -3,6 +3,13 @@ import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { authenticateApiKey, enforceApiRateLimit, recordApiUsage } from "@/lib/api/v1/auth"
 import { requirePublicApiFeature } from "@/lib/api/v1/public-api-plan"
+import {
+  getDispatchReadinessError,
+  isLoadStatusTransitionAllowed,
+  OPERATIONS_WORKFLOW_SETTINGS_SELECT,
+} from "@/lib/load-dispatch-validation"
+import { computePermitRequirement } from "@/lib/permit-requirement"
+import { normalizeLoadStatus } from "@/lib/load-status"
 
 const patchLoadSchema = z
   .object({
@@ -65,6 +72,64 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || "Invalid payload" }, { status: 400 })
 
   const supabase = createAdminClient()
+  const { data: currentLoad, error: fetchError } = await supabase
+    .from("loads")
+    .select(
+      "id, status, driver_id, truck_id, weight, weight_kg, length, width, height, is_oversized, requires_permit",
+    )
+    .eq("id", id)
+    .eq("company_id", auth.companyId)
+    .maybeSingle()
+
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message || "Failed to fetch load" }, { status: 500 })
+  }
+  if (!currentLoad) {
+    return NextResponse.json({ error: "Load not found" }, { status: 404 })
+  }
+
+  const { data: companySettings } = await supabase
+    .from("company_settings")
+    .select(`${OPERATIONS_WORKFLOW_SETTINGS_SELECT}, emergency_contact_required`)
+    .eq("company_id", auth.companyId)
+    .maybeSingle()
+
+  if (parsed.data.status && parsed.data.status !== currentLoad.status) {
+    const transitionCheck = isLoadStatusTransitionAllowed(
+      currentLoad.status,
+      parsed.data.status,
+      Boolean(companySettings?.allow_status_skip),
+      companySettings?.required_statuses,
+    )
+    if (!transitionCheck.allowed) {
+      return NextResponse.json({ error: transitionCheck.error }, { status: 400 })
+    }
+  }
+
+  const nextStatus = parsed.data.status ?? currentLoad.status
+  const permitRequirement = computePermitRequirement({
+    weight_kg: currentLoad.weight_kg,
+    weight: currentLoad.weight,
+    length: currentLoad.length,
+    width: currentLoad.width,
+    height: currentLoad.height,
+    is_oversized: currentLoad.is_oversized,
+  })
+  const dispatchError = await getDispatchReadinessError({
+    supabase,
+    companyId: auth.companyId,
+    loadId: id,
+    currentStatus: normalizeLoadStatus(currentLoad.status),
+    nextStatus: String(nextStatus),
+    requiresPermit: Boolean(currentLoad.requires_permit ?? permitRequirement.required),
+    truckId: parsed.data.truck_id ?? currentLoad.truck_id,
+    driverId: parsed.data.driver_id ?? currentLoad.driver_id,
+    settings: companySettings,
+  })
+  if (dispatchError) {
+    return NextResponse.json({ error: dispatchError }, { status: 400 })
+  }
+
   const { data, error } = await supabase
     .from("loads")
     .update(parsed.data)

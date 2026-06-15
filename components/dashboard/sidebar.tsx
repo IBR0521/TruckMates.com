@@ -51,7 +51,7 @@ import {
 import { mapLegacyRole, type EmployeeRole } from "@/lib/roles"
 import { canViewFeature, canCreateFeature } from "@/lib/feature-permissions"
 import { getEldConnectionCount } from "@/app/actions/eld-wizard"
-import { getAiChatPlanContext } from "@/app/actions/ai-chat"
+import { useDashboardShell } from "@/components/dashboard/shell-bootstrap-provider"
 
 interface SidebarProps {
   isOpen: boolean
@@ -90,6 +90,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0)
   const [showEldConnectHint, setShowEldConnectHint] = useState(false)
   const [aiAssistantPlanBadge, setAiAssistantPlanBadge] = useState<string | null>("Pro")
+  const shell = useDashboardShell()
   const LAST_ROLE_KEY = "tm:lastKnownUserRole"
 
   // Check if we're on desktop (lg breakpoint = 1024px) - client only
@@ -150,17 +151,30 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
   }, [pathname])
 
   useEffect(() => {
-    let active = true
-    void getAiChatPlanContext().then((res) => {
-      if (!active || !res.data) return
-      setAiAssistantPlanBadge(res.data.sidebarLockBadge)
-    })
-    return () => {
-      active = false
+    if (!shell.data) return
+    const mappedRole = mapLegacyRole(shell.data.currentUser.role) as EmployeeRole
+    setUserRole(mappedRole)
+    try {
+      localStorage.setItem(LAST_ROLE_KEY, mappedRole)
+    } catch {
+      //
     }
-  }, [])
+    const managerRoles: EmployeeRole[] = ["super_admin", "operations_manager"]
+    const nextIsManager = managerRoles.includes(mappedRole)
+    setIsManager(nextIsManager)
+    setManagerCompanyId(nextIsManager ? shell.data.currentUser.company_id : null)
+    setAiAssistantPlanBadge(shell.data.aiChatPlan.sidebarLockBadge)
+    if (canViewFeature(mappedRole, "eld")) {
+      setShowEldConnectHint(shell.data.eld.count === 0)
+    } else {
+      setShowEldConnectHint(false)
+    }
+    setIsLoading(false)
+  }, [shell.data])
 
   useEffect(() => {
+    if (shell.loading || shell.data) return
+
     let isMounted = true
     
     async function checkUserRole() {
@@ -250,9 +264,10 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [shell.loading, shell.data])
 
   useEffect(() => {
+    if (shell.data) return
     if (!userRole || !canViewFeature(userRole, "eld")) {
       setShowEldConnectHint(false)
       return

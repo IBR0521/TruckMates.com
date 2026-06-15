@@ -2,24 +2,33 @@
 
 import type React from "react"
 
+import dynamic from "next/dynamic"
 import { useState, useEffect } from "react"
 import { Menu, LogOut } from "lucide-react"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import Sidebar from "@/components/dashboard/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { FeedbackWidget } from "@/components/feedback-widget"
 import { NotificationsCenter } from "@/components/notifications-center"
-import { FirstLoginTour } from "@/components/onboarding/first-login-tour"
 import { FcmTokenRegistrar } from "@/components/notifications/fcm-token-registrar"
 import { DemoSessionBanner } from "@/components/dashboard/demo-session-banner"
 import { DashboardBillingBanners } from "@/components/billing/dashboard-billing-banners"
 import { AiQuotaBanner } from "@/components/billing/ai-quota-banner"
-import { AiChatWidget } from "@/components/ai/chat-widget"
 import { TrialHeaderBadge } from "@/components/billing/trial-header-badge"
+import { DashboardShellProvider } from "@/components/dashboard/shell-bootstrap-provider"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+
+const AiChatWidget = dynamic(
+  () => import("@/components/ai/chat-widget").then((m) => m.AiChatWidget),
+  { ssr: false, loading: () => null },
+)
+
+const FirstLoginTour = dynamic(
+  () => import("@/components/onboarding/first-login-tour").then((m) => m.FirstLoginTour),
+  { ssr: false, loading: () => null },
+)
 
 export default function DashboardLayoutClient({
   children,
@@ -84,6 +93,7 @@ export default function DashboardLayoutClient({
   }, [mounted]) // V3-005 FIX: Only depend on mounted, not sidebarCollapsed
 
   return (
+    <DashboardShellProvider>
     <div className="flex h-screen w-full bg-background text-foreground overflow-hidden" data-dashboard-layout>
       <Sidebar 
         isOpen={sidebarOpen} 
@@ -161,5 +171,6 @@ export default function DashboardLayoutClient({
       <FcmTokenRegistrar />
       <AiChatWidget />
     </div>
+    </DashboardShellProvider>
   )
 }

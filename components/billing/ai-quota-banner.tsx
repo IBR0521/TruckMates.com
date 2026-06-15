@@ -5,7 +5,7 @@ import { useEffect, useState } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { UpgradeModal } from "@/components/billing/upgrade-modal"
-import { getAiQuotaBannerContext } from "@/app/actions/plan-usage"
+import { useDashboardShell } from "@/components/dashboard/shell-bootstrap-provider"
 
 const SESSION_WARN = "tm:dismiss-ai-quota-banner-warn"
 const SESSION_CAP = "tm:dismiss-ai-quota-banner-cap"
@@ -21,28 +21,15 @@ function nextUtcMonthPhrase(): string {
 }
 
 export function AiQuotaBanner() {
+  const shell = useDashboardShell()
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const [dismissWarn, setDismissWarn] = useState(false)
   const [dismissCap, setDismissCap] = useState(false)
-  const [payload, setPayload] = useState<Awaited<ReturnType<typeof getAiQuotaBannerContext>>["data"]>(null)
 
   useEffect(() => {
     if (typeof window === "undefined") return
     setDismissWarn(sessionStorage.getItem(SESSION_WARN) === "1")
     setDismissCap(sessionStorage.getItem(SESSION_CAP) === "1")
-    let active = true
-    void (async () => {
-      try {
-        const res = await getAiQuotaBannerContext()
-        if (!active) return
-        setPayload(res.data)
-      } catch {
-        if (active) setPayload(null)
-      }
-    })()
-    return () => {
-      active = false
-    }
   }, [])
 
   function dismiss(kind: "warn" | "cap") {
@@ -55,6 +42,7 @@ export function AiQuotaBanner() {
     else setDismissCap(true)
   }
 
+  const payload = shell.data?.aiQuotaBanner
   if (!payload || !("eligible" in payload) || !payload.eligible) return null
 
   const ai = payload.ai

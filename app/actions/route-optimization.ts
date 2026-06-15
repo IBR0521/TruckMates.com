@@ -534,6 +534,12 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
     return { optimized: false, error: "Not enough stops to optimize" }
   }
 
+  const { data: routeSettings } = await supabase
+    .from("company_settings")
+    .select("consider_tolls, route_optimization_algorithm")
+    .eq("company_id", ctx.companyId)
+    .maybeSingle()
+
   // Convert stops to optimization format
   const stopsForOptimization = stops.map((stop: {
     id: string
@@ -553,7 +559,10 @@ export async function optimizeMultiStopRoute(routeId: string): Promise<{
   }))
 
   // Optimize route order
-  const optimizationResultWithUsage = await optimizeRouteOrder(stopsForOptimization, { companyId: ctx.companyId })
+  const optimizationResultWithUsage = await optimizeRouteOrder(stopsForOptimization, {
+    companyId: ctx.companyId,
+    includeTolls: routeSettings?.consider_tolls !== false,
+  })
 
   // Update route stops with optimized order
   for (const optimizedStop of optimizationResultWithUsage.optimizedOrder) {

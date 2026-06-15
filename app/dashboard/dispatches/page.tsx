@@ -43,6 +43,7 @@ import {
   quickAssignLoad,
   quickAssignRoute,
 } from "@/app/actions/dispatches"
+import { ensureDispatchConfirmed } from "@/lib/dispatch-confirm-client"
 import { DispatchPlanningBoard } from "@/components/dispatch/dispatch-planning-board"
 import { publishLoad, duplicateLoad } from "@/app/actions/loads"
 import { getDrivers } from "@/app/actions/drivers"
@@ -426,6 +427,8 @@ export default function DispatchesPage() {
     const effectiveTruckId = truckId ?? load?.truck_id
     await maybeWarnPreTripMissing(effectiveTruckId)
 
+    if (!(await ensureDispatchConfirmed())) return
+
     setAssigning(`load-${loadId}`)
     try {
       const result = await quickAssignLoad(loadId, driverId, truckId)
@@ -514,6 +517,7 @@ export default function DispatchesPage() {
 
   async function handleAssignFromNearby(loadId: string, driverId: string, truckId: string) {
     await maybeWarnPreTripMissing(truckId)
+    if (!(await ensureDispatchConfirmed())) return
     setAssigning(`load-${loadId}`)
     setNearbyDriversModal({ open: false, loadId: null, drivers: [] })
     try {

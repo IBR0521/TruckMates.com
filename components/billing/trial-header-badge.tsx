@@ -2,23 +2,20 @@
 
 import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
-import { getBillingPlanContext } from "@/app/actions/plan-usage"
+import { useDashboardShell } from "@/components/dashboard/shell-bootstrap-provider"
 
 export function TrialHeaderBadge() {
+  const shell = useDashboardShell()
   const [show, setShow] = useState(false)
 
   useEffect(() => {
-    let a = true
-    void getBillingPlanContext().then((r) => {
-      if (!a || !r.data) return
-      const trialing = String(r.data.subscription_status) === "trial"
-      const ends = r.data.trial_ends_at ? new Date(r.data.trial_ends_at).getTime() : null
-      setShow(Boolean(trialing && ends !== null && ends > Date.now()))
-    })
-    return () => {
-      a = false
-    }
-  }, [])
+    if (!shell.data?.billing) return
+    const trialing = String(shell.data.billing.subscription_status) === "trial"
+    const ends = shell.data.billing.trial_ends_at
+      ? new Date(shell.data.billing.trial_ends_at).getTime()
+      : null
+    setShow(Boolean(trialing && ends !== null && ends > Date.now()))
+  }, [shell.data])
 
   if (!show) return null
 

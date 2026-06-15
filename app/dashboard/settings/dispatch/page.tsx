@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-formats"
 import { Save, Radio, Info, Users, Bell, Route, MapPin } from "lucide-react"
@@ -118,7 +119,9 @@ export default function DispatchSettingsPage() {
           notify_on_driver_late: result.data.notify_on_driver_late !== false,
           notify_on_route_deviation: result.data.notify_on_route_deviation || false,
           notify_on_delivery_delay: result.data.notify_on_delivery_delay !== false,
-          notification_channels: result.data.notification_channels || ["email", "in_app"],
+          notification_channels: Array.isArray(result.data.notification_channels)
+            ? result.data.notification_channels.map((v: unknown) => String(v))
+            : ["email", "in_app"],
           require_confirmation_before_dispatch: result.data.require_confirmation_before_dispatch || false,
           auto_dispatch_on_ready: result.data.auto_dispatch_on_ready || false,
           dispatch_approval_required: result.data.dispatch_approval_required || false,
@@ -654,6 +657,37 @@ export default function DispatchSettingsPage() {
                   checked={settings.notify_on_delivery_delay}
                   onCheckedChange={(checked) => setSettings({ ...settings, notify_on_delivery_delay: checked })}
                 />
+              </div>
+
+              <Separator />
+              <div className="rounded-lg border border-border p-4 space-y-3">
+                <p className="text-sm font-medium text-foreground">Notification channels</p>
+                <p className="text-xs text-muted-foreground">
+                  Choose which channels operations alerts may use for this company.
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(["email", "sms", "in_app", "push"] as const).map((channel) => {
+                    const checked = settings.notification_channels.includes(channel)
+                    return (
+                      <label key={channel} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(value) => {
+                            const next = value
+                              ? [...settings.notification_channels, channel]
+                              : settings.notification_channels.filter((c: string) => c !== channel)
+                            if (next.length === 0) {
+                              toast.error("At least one notification channel is required")
+                              return
+                            }
+                            setSettings({ ...settings, notification_channels: next })
+                          }}
+                        />
+                        <span className="capitalize">{channel.replace(/_/g, " ")}</span>
+                      </label>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           </Card>

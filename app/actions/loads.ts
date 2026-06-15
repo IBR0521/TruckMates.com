@@ -22,8 +22,17 @@ import {
   insertCreditLimitOverrideAudit,
   type DeferredCreditOverrideAudit,
 } from "@/lib/credit-check"
-import { computePermitRequirement, hasValidPermitAttachment } from "@/lib/permit-requirement"
-import { getDispatchGateErrors, isDispatchTransition } from "@/lib/dispatch-gates"
+import { computePermitRequirement } from "@/lib/permit-requirement"
+import {
+  getDispatchReadinessError,
+  isLoadStatusTransitionAllowed,
+  shouldAttemptAutoDispatchOnReady,
+  OPERATIONS_WORKFLOW_SETTINGS_SELECT,
+} from "@/lib/load-dispatch-validation"
+import { pickAutoAssignDriverAndTruck } from "@/lib/load-auto-assign"
+import { isLoadNotifyEventEnabled, type LoadNotifyEvent } from "@/lib/load-operations-notify"
+import { isFirstDispatchTransition } from "@/lib/dispatch-notify-settings"
+import type { OperationsWorkflowSettings } from "@/lib/load-workflow-settings"
 
 /** Subset of load fields used for background notifications after updates */
 type LoadUpdateNotificationPayload = {
@@ -75,24 +84,32 @@ function driverHasHazmatEndorsement(endorsements: unknown): boolean {
 }
 
 // Helper function to send notifications in background (non-blocking)
-async function sendNotificationsForLoadUpdate(loadData: LoadUpdateNotificationPayload) {
+async function sendNotificationsForLoadUpdate(
+  loadData: LoadUpdateNotificationPayload,
+  options?: {
+    event?: LoadNotifyEvent
+    settings?: OperationsWorkflowSettings | null
+    companyId?: string
+  },
+) {
   try {
     const supabase = await createClient()
     const ctx = await getCachedAuthContext()
-    if (ctx.error || !ctx.companyId) return
+    const companyId = options?.companyId ?? ctx.companyId
+    if (ctx.error || !companyId) return
 
-    // BUG-018 FIX: Filter notifications by relevance - only notify assigned driver, dispatcher, and managers
-    // Get assigned driver if load has one
+    const event = options?.event ?? "status_change"
+    if (!isLoadNotifyEventEnabled(options?.settings, event)) return
+
     let assignedDriverId: string | null = null
     if (loadData.driver_id) {
       assignedDriverId = loadData.driver_id
     }
 
-    // Get relevant users: assigned driver, dispatchers, and managers only (6-role names)
     const { data: relevantUsers } = await supabase
       .from("users")
       .select("id, role")
-      .eq("company_id", ctx.companyId)
+      .eq("company_id", companyId)
       .or([
         assignedDriverId ? `id.eq.${assignedDriverId}` : "",
         "role.in.(super_admin,operations_manager,dispatcher,safety_compliance)",
@@ -655,71 +672,30 @@ export async function createLoad(formData: {
   
   if ((settings.auto_assign_driver || settings.auto_assign_truck) && formData.origin && formData.destination) {
     try {
-      // Get suggestions directly (avoid circular import by calling the logic inline)
-      // BUG-035 FIX: Sanitize search strings to prevent PostgREST filter injection
-      const sanitizeForOr = (str: string) => (str || '').replace(/[,()]/g, '').replace(/\.(eq|neq|gt|gte|lt|lte|like|ilike|is|in|cs|cd|ov|sl|sr|nxr|nxl|adj|not)/gi, '').replace(/%/g, '').trim().substring(0, 200)
-      const safeOrigin = sanitizeForOr(formData.origin || '')
-      const safeDest = sanitizeForOr(formData.destination || '')
-      
-      const { data: recentLoads } = await supabase
-        .from("loads")
-        .select("driver_id, truck_id, customer_id")
-        .eq("company_id", ctx.companyId)
-        .or(`origin.ilike.%${safeOrigin}%,destination.ilike.%${safeDest}%`)
-        .order("created_at", { ascending: false })
-        .limit(5)
-
-      if (recentLoads && recentLoads.length > 0) {
-        // Find most frequently used driver for this route
-        const driverCounts: Record<string, number> = {}
-        const truckCounts: Record<string, number> = {}
-        recentLoads.forEach((load: { driver_id: string | null; truck_id: string | null; [key: string]: unknown }) => {
-          if (load.driver_id) {
-            driverCounts[load.driver_id] = (driverCounts[load.driver_id] || 0) + 1
-          }
-          if (load.truck_id) {
-            truckCounts[load.truck_id] = (truckCounts[load.truck_id] || 0) + 1
-          }
-        })
-
-        const topDriverId = Object.entries(driverCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
-        const topTruckId = Object.entries(truckCounts).sort((a, b) => b[1] - a[1])[0]?.[0]
-
-        if (settings.auto_assign_driver && !finalDriverId && topDriverId) {
-          // LOG-004 FIX: Check if driver is already on an active load before assigning
-          const { data: activeDriverLoads } = await supabase
-            .from("loads")
-            .select("id, shipment_number")
-            .eq("driver_id", topDriverId)
-            .in("status", ["scheduled", "in_transit"])
-            .eq("company_id", ctx.companyId)
-            .limit(1)
-
-          // Only assign if driver is not already on an active load
-          if (!activeDriverLoads || activeDriverLoads.length === 0) {
-            // V3-002 FIX: Add company_id filter to prevent cross-tenant data access
-            const { data: driver } = await supabase
-              .from("drivers")
-              .select("id, name, status")
-              .eq("id", topDriverId)
-              .eq("company_id", ctx.companyId)
-              .eq("status", "active")
-              .maybeSingle()
-            if (driver) finalDriverId = driver.id
-          }
-        }
-
-        if (settings.auto_assign_truck && !finalTruckId && topTruckId) {
-          // V3-002 FIX: Add company_id filter to prevent cross-tenant data access
-          const { data: truck } = await supabase
-            .from("trucks")
-            .select("id, truck_number, status")
-            .eq("id", topTruckId)
-            .eq("company_id", ctx.companyId)
-            .in("status", ["available", "in_use"])
-            .maybeSingle()
-          if (truck) finalTruckId = truck.id
-        }
+      const auto = await pickAutoAssignDriverAndTruck(
+        supabase,
+        ctx.companyId,
+        settings as OperationsWorkflowSettings,
+        {
+          origin: formData.origin,
+          destination: formData.destination,
+          existingDriverId: finalDriverId,
+          existingTruckId: finalTruckId,
+          pickupLat:
+            (formData as { shipper_latitude?: number | null }).shipper_latitude ??
+            (formData as { pickup_latitude?: number | null }).pickup_latitude ??
+            null,
+          pickupLng:
+            (formData as { shipper_longitude?: number | null }).shipper_longitude ??
+            (formData as { pickup_longitude?: number | null }).pickup_longitude ??
+            null,
+        },
+      )
+      if (settings.auto_assign_driver && !finalDriverId && auto.driverId) {
+        finalDriverId = auto.driverId
+      }
+      if (settings.auto_assign_truck && !finalTruckId && auto.truckId) {
+        finalTruckId = auto.truckId
       }
     } catch (err) {
       Sentry.captureException(err)
@@ -965,6 +941,24 @@ export async function createLoad(formData: {
   const trackingToken = crypto.randomBytes(32).toString("hex")
   loadData.public_tracking_token = trackingToken
 
+  const dispatchTargetStatus = String(finalStatus).toLowerCase()
+  if (dispatchTargetStatus === "scheduled" || dispatchTargetStatus === "in_transit") {
+    const createDispatchError = await getDispatchReadinessError({
+      supabase,
+      companyId: ctx.companyId,
+      loadId: null,
+      currentStatus: "pending",
+      nextStatus: dispatchTargetStatus,
+      requiresPermit: Boolean(loadData.requires_permit),
+      truckId: finalTruckId ?? formData.truck_id ?? null,
+      driverId: finalDriverId ?? formData.driver_id ?? null,
+      settings: settings as OperationsWorkflowSettings,
+    })
+    if (createDispatchError) {
+      return { error: createDispatchError, data: null }
+    }
+  }
+
   const { data, error } = await supabase
     .from("loads")
     .insert(loadData)
@@ -1039,6 +1033,23 @@ export async function createLoad(formData: {
     user_id: ctx.userId || null,
     load_id: data.id,
     shipment_number: shipmentNumber,
+  })
+
+  sendNotificationsForLoadUpdate(
+    {
+      driver_id: data.driver_id,
+      shipment_number: data.shipment_number,
+      status: data.status,
+      origin: formData.origin,
+      destination: formData.destination,
+    },
+    {
+      event: "load_created",
+      settings: settings as OperationsWorkflowSettings,
+      companyId: ctx.companyId,
+    },
+  ).catch((error) => {
+    Sentry.captureException(error)
   })
 
   void invalidateAiContextCache(ctx.companyId, "load")
@@ -1151,25 +1162,24 @@ export async function updateLoad(
   const willBeDelivered = formData.status === "delivered"
   const wasConfirmed = currentLoad?.status === "confirmed"
   const willBeConfirmed = formData.status === "confirmed"
+  const wasInTransit = String(currentLoad?.status || "").toLowerCase() === "in_transit"
 
-  // DAT-002 FIX: Validate status transitions to prevent invalid state changes
-  // Define allowed transitions - delivered loads cannot revert to pending
+  const { data: workflowSettings } = await supabase
+    .from("company_settings")
+    .select(OPERATIONS_WORKFLOW_SETTINGS_SELECT)
+    .eq("company_id", ctx.companyId)
+    .maybeSingle()
+  const opsSettings = workflowSettings as OperationsWorkflowSettings | null
+
   if (formData.status && formData.status !== currentLoad.status) {
-    const currentStatus = normalizeLoadStatus(currentLoad.status)
-    const nextStatus = parseLoadStatus(formData.status)
-    if (!nextStatus) {
-      return {
-        error: `Invalid status "${formData.status}". Must be one of: ${ALL_LOAD_STATUSES.join(", ")}`,
-        data: null,
-      }
-    }
-    const allowedNextStatuses = getAllowedNextLoadStatuses(currentStatus)
-    
-    if (!allowedNextStatuses.includes(nextStatus)) {
-      return { 
-        error: `Invalid status transition: Cannot change load status from "${currentStatus}" to "${nextStatus}". Allowed transitions: ${allowedNextStatuses.join(", ") || "none"}`,
-        data: null 
-      }
+    const transitionCheck = isLoadStatusTransitionAllowed(
+      currentLoad.status,
+      formData.status,
+      Boolean(opsSettings?.allow_status_skip),
+      opsSettings?.required_statuses,
+    )
+    if (!transitionCheck.allowed) {
+      return { error: transitionCheck.error || "Invalid status transition", data: null }
     }
   }
 
@@ -1387,51 +1397,22 @@ export async function updateLoad(
 
   const currentStatus = String(currentLoad.status ?? "").toLowerCase()
   const nextStatus = String(updateData.status ?? currentLoad.status ?? "").toLowerCase()
+  const nextTruckId =
+    updateData.truck_id !== undefined ? updateData.truck_id : currentLoad.truck_id
 
-  if (isDispatchTransition(currentStatus, nextStatus)) {
-    const { data: companySettings } = await supabase
-      .from("company_settings")
-      .select("require_bol_before_dispatch, require_documents_before_dispatch, required_documents")
-      .eq("company_id", ctx.companyId)
-      .maybeSingle()
-
-    const [{ count: bolCount }, { data: loadDocs }] = await Promise.all([
-      supabase
-        .from("bols")
-        .select("id", { count: "exact", head: true })
-        .eq("company_id", ctx.companyId)
-        .eq("load_id", id),
-      supabase
-        .from("documents")
-        .select("type")
-        .eq("company_id", ctx.companyId)
-        .eq("load_id", id),
-    ])
-
-    const gateErrors = getDispatchGateErrors({
-      loadId: id,
-      currentStatus,
-      nextStatus,
-      settings: companySettings,
-      hasBol: (bolCount ?? 0) > 0,
-      attachedDocumentTypes: (loadDocs || []).map((d: { type?: string | null }) => String(d.type || "")),
-    })
-    if (gateErrors.length > 0) {
-      return { error: gateErrors[0], data: null }
-    }
-  }
-
-  if (computedPermit.required && isDispatchTransition(currentStatus, nextStatus)) {
-    const today = new Date().toISOString().split("T")[0]
-    const { data: permits } = await supabase
-      .from("permits")
-      .select("id, expiry_date, document_id")
-      .eq("company_id", ctx.companyId)
-      .eq("load_id", id)
-    const validPermit = hasValidPermitAttachment(permits, today)
-    if (!validPermit) {
-      return { error: "Permit attachment is required before dispatching this load.", data: null }
-    }
+  const dispatchError = await getDispatchReadinessError({
+    supabase,
+    companyId: ctx.companyId,
+    loadId: id,
+    currentStatus,
+    nextStatus,
+    requiresPermit: computedPermit.required,
+    truckId: typeof nextTruckId === "string" ? nextTruckId : null,
+    driverId: typeof nextDriverId === "string" ? nextDriverId : null,
+    settings: opsSettings,
+  })
+  if (dispatchError) {
+    return { error: dispatchError, data: null }
   }
 
   // If no changes, return early
@@ -1458,7 +1439,49 @@ export async function updateLoad(
     return { error: "Failed to update load", data: null }
   }
 
+  let resultData = data
+  if (
+    shouldAttemptAutoDispatchOnReady(opsSettings, data, {
+      status: "status" in updateData,
+      driver_id: "driver_id" in updateData,
+      truck_id: "truck_id" in updateData,
+    })
+  ) {
+    const autoError = await getDispatchReadinessError({
+      supabase,
+      companyId: ctx.companyId,
+      loadId: id,
+      currentStatus: "confirmed",
+      nextStatus: "scheduled",
+      requiresPermit: Boolean(data.requires_permit ?? computedPermit.required),
+      truckId: data.truck_id,
+      driverId: data.driver_id,
+      settings: opsSettings,
+    })
+    if (!autoError) {
+      const { data: scheduledRow, error: scheduleError } = await supabase
+        .from("loads")
+        .update({ status: "scheduled" })
+        .eq("id", id)
+        .eq("company_id", ctx.companyId)
+        .select()
+        .single()
+      if (!scheduleError && scheduledRow) {
+        resultData = scheduledRow
+      }
+    }
+  }
+
   if (String(updateData.status || "").toLowerCase() === "in_transit") {
+    const becameInTransit =
+      !wasInTransit &&
+      String(resultData?.status ?? updateData.status ?? "").toLowerCase() === "in_transit"
+    if (becameInTransit && resultData?.id) {
+      const { notifyCustomerBrokerForCheckCallEvent } = await import("./check-call-customer-notify")
+      notifyCustomerBrokerForCheckCallEvent(ctx.companyId, id, "trip_start").catch((err) => {
+        Sentry.captureException(err)
+      })
+    }
     runAgentEvaluation({
       companyId: ctx.companyId,
       trigger: "load_status_auto_update",
@@ -1536,19 +1559,43 @@ export async function updateLoad(
   // This prevents duplicate/noisy "status pending" notifications when only assignment fields changed.
   const shouldNotifyLoadUpdate =
     !!updateData.status || !!updateData.origin || !!updateData.destination
-  if (data && shouldNotifyLoadUpdate) {
-    const status = typeof updateData.status === "string" ? updateData.status : undefined
+  if (resultData && shouldNotifyLoadUpdate) {
+    const status =
+      typeof resultData.status === "string"
+        ? resultData.status
+        : typeof updateData.status === "string"
+          ? updateData.status
+          : undefined
     const origin = typeof updateData.origin === "string" ? updateData.origin : undefined
     const destination = typeof updateData.destination === "string" ? updateData.destination : undefined
-    const notificationPayload: LoadUpdateNotificationPayload = {
-      driver_id: data.driver_id,
-      shipment_number: data.shipment_number,
-      status,
-      origin,
-      destination,
-    }
-    // Don't await - send notifications in background
-    sendNotificationsForLoadUpdate(notificationPayload).catch((error) => {
+    const notifyEvent: LoadNotifyEvent = willBeDelivered
+      ? "delivered"
+      : isFirstDispatchTransition(currentLoad.status, status)
+        ? "dispatched"
+        : "status_change"
+    sendNotificationsForLoadUpdate(
+      {
+        driver_id: resultData.driver_id,
+        shipment_number: resultData.shipment_number,
+        status,
+        origin,
+        destination,
+      },
+      { event: notifyEvent, settings: opsSettings, companyId: ctx.companyId },
+    ).catch((error) => {
+      Sentry.captureException(error)
+    })
+  }
+
+  if (resultData && formData.driver_id && !currentLoad.driver_id) {
+    sendNotificationsForLoadUpdate(
+      {
+        driver_id: resultData.driver_id,
+        shipment_number: resultData.shipment_number,
+        status: resultData.status,
+      },
+      { event: "driver_assigned", settings: opsSettings, companyId: ctx.companyId },
+    ).catch((error) => {
       Sentry.captureException(error)
     })
   }
@@ -1558,14 +1605,14 @@ export async function updateLoad(
     try {
       const { createAlert } = await import("./alerts")
       await createAlert({
-        title: `Load Status Changed: ${data.shipment_number}`,
-        message: `Load ${data.shipment_number} status changed to ${formData.status}`,
+        title: `Load Status Changed: ${resultData.shipment_number}`,
+        message: `Load ${resultData.shipment_number} status changed to ${formData.status}`,
         event_type: "load_status_change",
         priority: formData.status === "delivered" ? "high" : "normal",
         load_id: id,
         metadata: {
-          shipment_number: data.shipment_number,
-          old_status: data.status,
+          shipment_number: resultData.shipment_number,
+          old_status: currentLoad.status,
           new_status: formData.status,
         },
       }).catch((err) => {
@@ -1628,7 +1675,7 @@ export async function updateLoad(
   revalidatePath("/dashboard/accounting/invoices")
 
   // CRITICAL FIX: Ensure data is JSON-serializable for Next.js server actions
-  const serializableData = data ? JSON.parse(JSON.stringify(data, (key, value) => {
+  const serializableData = resultData ? JSON.parse(JSON.stringify(resultData, (key, value) => {
     if (value instanceof Date) return value.toISOString()
     if (typeof value === 'bigint') return value.toString()
     return value
@@ -1759,73 +1806,14 @@ export async function bulkDeleteLoads(ids: string[]) {
 }
 
 export async function bulkUpdateLoadStatus(ids: string[], status: string) {
-  // Check permission
-  const permission = await checkEditPermission("loads")
-  if (!permission.allowed) {
-    return { error: permission.error || "You don't have permission to edit loads", data: null }
+  const detailed = await bulkUpdateLoadStatusDetailed(ids, status)
+  if (detailed.error) {
+    return { error: detailed.error, data: null }
   }
-
-  // Validate status value
-  const normalizedTarget = parseLoadStatus(status)
-  if (!normalizedTarget) {
-    return { error: `Invalid status. Must be one of: ${ALL_LOAD_STATUSES.join(", ")}`, data: null }
+  return {
+    data: { updated: detailed.data?.succeeded ?? ids.length },
+    error: null,
   }
-
-  const supabase = await createClient()
-  const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
-    return { error: ctx.error || "Not authenticated", data: null }
-  }
-
-  // Validate transitions per-load to avoid applying impossible status changes in bulk
-  const { data: currentLoads, error: fetchError } = await supabase
-    .from("loads")
-    .select("id, shipment_number, status")
-    .in("id", ids)
-    .eq("company_id", ctx.companyId)
-
-  if (fetchError) {
-    Sentry.captureException(fetchError)
-    return { error: "Failed to fetch loads for bulk update", data: null }
-  }
-
-  if (!currentLoads || currentLoads.length === 0) {
-    return { error: "No loads found to update", data: null }
-  }
-
-  const invalidLoads = currentLoads.filter((l: { id: string; shipment_number: string | null; status: string }) => {
-    const currentStatus = normalizeLoadStatus(l.status)
-    if (currentStatus === normalizedTarget) return false
-    const allowedNext = getAllowedNextLoadStatuses(currentStatus)
-    return !allowedNext.includes(normalizedTarget)
-  })
-
-  if (invalidLoads.length > 0) {
-    const sample = invalidLoads
-      .slice(0, 5)
-      .map((l: { id: string; shipment_number: string | null; status: string }) => `${l.shipment_number || l.id} (${normalizeLoadStatus(l.status)} → ${normalizedTarget})`)
-      .join(", ")
-    const extra = invalidLoads.length > 5 ? ` (+${invalidLoads.length - 5} more)` : ""
-    return {
-      error: `Invalid status transition for ${invalidLoads.length} load(s): ${sample}${extra}`,
-      data: null,
-    }
-  }
-
-  const { error } = await supabase
-    .from("loads")
-    .update({ status: normalizedTarget })
-    .in("id", ids)
-    .eq("company_id", ctx.companyId)
-
-  if (error) {
-    Sentry.captureException(error)
-    return { error: "Failed to update load status", data: null }
-  }
-
-  void invalidateAiContextCache(ctx.companyId, "load")
-  revalidatePath("/dashboard/loads")
-  return { data: { updated: ids.length }, error: null }
 }
 
 export async function publishLoad(id: string) {
@@ -2124,6 +2112,13 @@ export async function bulkUpdateLoadStatusDetailed(
     (loads ?? []).map((l: BulkLoadRow) => [l.id, l]),
   )
 
+  const { data: bulkSettings } = await supabase
+    .from("company_settings")
+    .select("allow_status_skip, required_statuses")
+    .eq("company_id", ctx.companyId)
+    .maybeSingle()
+  const allowStatusSkip = Boolean(bulkSettings?.allow_status_skip)
+
   const results: BulkLoadItemResult[] = []
 
   for (const id of ids) {
@@ -2150,13 +2145,18 @@ export async function bulkUpdateLoadStatusDetailed(
       continue
     }
 
-    const allowedNext = getAllowedNextLoadStatuses(currentStatus)
-    if (!allowedNext.includes(normalizedTarget)) {
+    const transitionCheck = isLoadStatusTransitionAllowed(
+      currentStatus,
+      normalizedTarget,
+      allowStatusSkip,
+      bulkSettings?.required_statuses,
+    )
+    if (!transitionCheck.allowed) {
       results.push({
         load_id: id,
         shipment_number: row.shipment_number,
         ok: false,
-        error: `Invalid transition ${currentStatus} → ${normalizedTarget}`,
+        error: transitionCheck.error || `Invalid transition ${currentStatus} → ${normalizedTarget}`,
       })
       continue
     }
@@ -2202,6 +2202,18 @@ export async function bulkAssignLoads(
   const ctx = await getCachedAuthContext()
   if (ctx.error || !ctx.companyId) {
     return { error: ctx.error || "Not authenticated", data: null }
+  }
+
+  const { data: bulkDispatchSettings } = await supabase
+    .from("company_settings")
+    .select("allow_bulk_dispatch")
+    .eq("company_id", ctx.companyId)
+    .maybeSingle()
+  if (bulkDispatchSettings?.allow_bulk_dispatch === false) {
+    return {
+      error: "Bulk dispatch is disabled in Settings → Dispatch. Enable it to assign multiple loads at once.",
+      data: null,
+    }
   }
 
   const { data: loads } = await supabase

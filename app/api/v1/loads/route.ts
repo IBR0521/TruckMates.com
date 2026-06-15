@@ -3,6 +3,7 @@ import { z } from "zod"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { authenticateApiKey, enforceApiRateLimit, recordApiUsage } from "@/lib/api/v1/auth"
 import { requirePublicApiFeature } from "@/lib/api/v1/public-api-plan"
+import { parseLoadStatus } from "@/lib/load-status"
 
 const createLoadSchema = z.object({
   shipment_number: z.string().min(1),
@@ -98,12 +99,51 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient()
+    const targetStatus = parseLoadStatus(parsed.data.status) ?? "pending"
+    if (targetStatus === "scheduled" || targetStatus === "in_transit") {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot create a load directly as scheduled or in_transit via API. Create as pending, then PATCH after assignment.",
+        },
+        { status: 400 },
+      )
+    }
+
+    if (parsed.data.driver_id) {
+      const { data: driver } = await supabase
+        .from("drivers")
+        .select("id")
+        .eq("id", parsed.data.driver_id)
+        .eq("company_id", auth.companyId)
+        .maybeSingle()
+      if (!driver) {
+        return NextResponse.json({ error: "Invalid driver_id for this company" }, { status: 400 })
+      }
+    }
+    if (parsed.data.truck_id) {
+      const { data: truck } = await supabase
+        .from("trucks")
+        .select("id")
+        .eq("id", parsed.data.truck_id)
+        .eq("company_id", auth.companyId)
+        .maybeSingle()
+      if (!truck) {
+        return NextResponse.json({ error: "Invalid truck_id for this company" }, { status: 400 })
+      }
+    }
+
+    const crypto = await import("crypto")
+    const insertPayload = {
+      company_id: auth.companyId,
+      ...parsed.data,
+      status: targetStatus,
+      public_tracking_token: crypto.randomBytes(32).toString("hex"),
+    }
+
     const { data, error } = await supabase
       .from("loads")
-      .insert({
-        company_id: auth.companyId,
-        ...parsed.data,
-      })
+      .insert(insertPayload)
       .select("id, shipment_number, origin, destination, status, driver_id, truck_id, load_date, estimated_delivery, value")
       .single()
 

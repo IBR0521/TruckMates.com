@@ -126,6 +126,40 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const { data: companySettings } = await supabase
+      .from("company_settings")
+      .select("track_driver_location, location_update_interval")
+      .eq("company_id", companyId)
+      .maybeSingle()
+
+    if (companySettings?.track_driver_location === false) {
+      return NextResponse.json(
+        { error: "Location tracking is disabled for this company" },
+        { status: 403 },
+      )
+    }
+
+    const intervalMinutes = Number(companySettings?.location_update_interval) || 5
+    const primaryDriverId = String(
+      (locations[0] as IncomingLocation | undefined)?.driver_id || "",
+    ).trim()
+    if (intervalMinutes > 0 && primaryDriverId) {
+      const since = new Date(Date.now() - intervalMinutes * 60 * 1000).toISOString()
+      const { count } = await supabase
+        .from("eld_locations")
+        .select("id", { count: "exact", head: true })
+        .eq("company_id", companyId)
+        .eq("driver_id", primaryDriverId)
+        .gte("timestamp", since)
+      if ((count ?? 0) > 0) {
+        return NextResponse.json({
+          success: true,
+          skipped: true,
+          reason: "location_update_interval",
+        })
+      }
+    }
+
     // Transform and validate locations
     const incomingLocations = locations as IncomingLocation[]
     const locationsToInsert = incomingLocations

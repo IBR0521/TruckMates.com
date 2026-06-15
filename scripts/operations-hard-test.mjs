@@ -196,33 +196,267 @@ for (const field of SETTINGS_UI_FIELDS) {
 
 console.log("\n6. Dispatch gate enforcement in code")
 const loadsSrc = read("app/actions/loads.ts")
+const loadDispatchValidationSrc = exists("lib/load-dispatch-validation.ts")
+  ? read("lib/load-dispatch-validation.ts")
+  : ""
+const gateSources = `${loadsSrc}\n${dispatchesSrc}\n${loadDispatchValidationSrc}\n${
+  exists("lib/dispatch-gates.ts") ? read("lib/dispatch-gates.ts") : ""
+}`
 const gates = [
   { name: "permit attachment gate", pattern: /Permit attachment is required before dispatching/ },
   { name: "HAZMAT fields gate", pattern: /HAZMAT loads require UN number/ },
   { name: "HAZMAT endorsement gate", pattern: /HAZMAT endorsement \(H\)/ },
 ]
 for (const gate of gates) {
-  if (gate.pattern.test(loadsSrc) || gate.pattern.test(dispatchesSrc)) pass(gate.name)
+  if (gate.pattern.test(gateSources)) pass(gate.name)
   else fail(`Missing ${gate.name}`)
 }
 
-if (/require_bol_before_dispatch/.test(loadsSrc) || /require_bol_before_dispatch/.test(dispatchesSrc)) {
+if (/require_bol_before_dispatch/.test(gateSources)) {
   pass("require_bol_before_dispatch enforced in dispatch path")
 } else {
-  warn("require_bol_before_dispatch UI exists but is not enforced in loads/dispatches actions")
+  warn("require_bol_before_dispatch UI exists but is not enforced in dispatch actions")
 }
 
-if (/getDispatchGateErrors/.test(dispatchesSrc)) pass("dispatch board uses shared dispatch gate checks")
-else warn("dispatches.ts missing shared dispatch gate checks")
+if (/getDispatchGateErrors/.test(gateSources)) pass("dispatch paths use shared dispatch gate checks")
+else warn("shared dispatch gate checks missing from dispatch actions")
 
 console.log("\n7. Shared permit logic module")
 if (exists("lib/permit-requirement.ts")) pass("lib/permit-requirement.ts exists")
 else fail("lib/permit-requirement.ts missing")
 
+if (exists("lib/load-dispatch-validation.ts")) pass("lib/load-dispatch-validation.ts exists")
+else fail("lib/load-dispatch-validation.ts missing")
+
+const loadDispatchValidation = exists("lib/load-dispatch-validation.ts")
+  ? read("lib/load-dispatch-validation.ts")
+  : ""
+const apiLoadPatch = read("app/api/v1/loads/[id]/route.ts")
+
+if (loadDispatchValidation.includes("getDispatchReadinessError")) pass("shared dispatch readiness helper exists")
+else fail("lib/load-dispatch-validation.ts missing getDispatchReadinessError")
+
+if (apiLoadPatch.includes("getDispatchReadinessError")) pass("public API PATCH enforces dispatch readiness")
+else fail("app/api/v1/loads/[id]/route.ts bypasses dispatch validation")
+
+const apiLoadPost = read("app/api/v1/loads/route.ts")
+if (apiLoadPost.includes("Cannot create a load directly as scheduled")) {
+  pass("public API POST blocks direct scheduled/in_transit create")
+} else {
+  fail("app/api/v1/loads/route.ts allows unsafe direct dispatch create")
+}
+
+if (/allow_status_skip/.test(loadsSrc) && loadsSrc.includes("isLoadStatusTransitionAllowed")) {
+  pass("allow_status_skip wired into updateLoad transitions")
+} else {
+  warn("allow_status_skip not enforced in updateLoad")
+}
+
+if (loadsSrc.includes("allow_bulk_dispatch") && loadsSrc.includes("bulkAssignLoads")) {
+  pass("allow_bulk_dispatch wired into bulkAssignLoads")
+} else {
+  warn("allow_bulk_dispatch not enforced in bulkAssignLoads")
+}
+
+if (numberFormats.includes("required_documents")) pass("required_documents persisted in company settings")
+else warn("required_documents missing from number-formats persistence")
+
+const migration237 = read("supabase/migrations/237_20260614000000_add_operations_notification_settings.sql")
+const migration236 = exists("supabase/migrations/236_20260613000000_add_operations_workflow_settings.sql")
+  ? read("supabase/migrations/236_20260613000000_add_operations_workflow_settings.sql")
+  : ""
+for (const col of [
+  "dispatch_approval_required",
+  "auto_dispatch_on_ready",
+  "allow_bulk_dispatch",
+  "allow_status_skip",
+]) {
+  if (migration236.includes(col) && numberFormats.includes(col)) pass(`migration 236 + settings: ${col}`)
+  else if (!migration236) warn("migration 236 file missing")
+  else warn(`migration 236 / settings mismatch: ${col}`)
+}
+for (const col of [
+  "notify_on_load_created",
+  "notify_on_status_change",
+  "notify_on_delivery",
+  "notify_driver_on_assignment",
+  "notify_on_delivery_delay",
+  "required_statuses",
+]) {
+  if (migration237.includes(col) && numberFormats.includes(col)) pass(`migration 237 + settings: ${col}`)
+  else if (migration237.includes(col)) warn(`migration 237 has ${col} but number-formats does not persist it`)
+  else warn(`migration 237 missing column ${col}`)
+}
+
 if (loadsSrc.includes("permit-requirement")) pass("loads.ts imports shared permit module")
 else warn("loads.ts still uses inline computePermitRequirement")
 
-console.log("\n8. TypeScript config (build health)")
+console.log("\n9. Remaining Operations gap wiring")
+if (dispatchesSrc.includes("getRouteLoadsDispatchReadinessError")) {
+  pass("quickAssignRoute enforces dispatch readiness for linked loads")
+} else {
+  fail("quickAssignRoute missing route-level dispatch gate checks")
+}
+
+const autoAssignSrc = exists("lib/load-auto-assign.ts") ? read("lib/load-auto-assign.ts") : ""
+if (autoAssignSrc.includes("haversineMiles") && autoAssignSrc.includes("max_distance_for_auto_assign")) {
+  pass("auto-assign honors max_distance_for_auto_assign with proximity")
+} else {
+  fail("lib/load-auto-assign.ts does not enforce max_distance_for_auto_assign")
+}
+
+if (loadSettingsUi.includes("required_statuses") && loadSettingsUi.includes("allow_status_skip")) {
+  pass("load settings UI exposes required_statuses when skip is enabled")
+} else {
+  fail("load settings UI missing required_statuses editor")
+}
+
+if (exists("app/api/cron/scan-delivery-delays/route.ts")) {
+  pass("delivery delay cron route exists")
+} else {
+  fail("app/api/cron/scan-delivery-delays/route.ts missing")
+}
+
+const vercelJson = exists("vercel.json") ? read("vercel.json") : ""
+if (vercelJson.includes("/api/cron/scan-delivery-delays")) {
+  pass("vercel.json schedules delivery delay scan")
+} else {
+  warn("vercel.json missing scan-delivery-delays cron entry")
+}
+
+if (exists("app/actions/delivery-delay-notify.ts")) {
+  const delayNotify = read("app/actions/delivery-delay-notify.ts")
+  if (delayNotify.includes("notify_on_delivery_delay")) pass("delivery delay scan respects notify_on_delivery_delay")
+  else fail("delivery-delay-notify.ts ignores notify_on_delivery_delay setting")
+} else {
+  fail("app/actions/delivery-delay-notify.ts missing")
+}
+
+if (exists("app/actions/dispatch-event-notify.ts")) {
+  const dispatchNotify = read("app/actions/dispatch-event-notify.ts")
+  if (dispatchNotify.includes("isDispatchNotifyEventEnabled")) {
+    pass("dispatch-event-notify respects company notification toggles")
+  } else {
+    fail("dispatch-event-notify.ts missing notification toggle checks")
+  }
+  if (dispatchNotify.includes("scanMissedCheckCallsForCompany")) pass("missed check call scanner exists")
+  else fail("dispatch-event-notify.ts missing missed check call scan")
+  if (dispatchNotify.includes("scanDriverLateForCompany")) pass("driver late scanner exists")
+  else fail("dispatch-event-notify.ts missing driver late scan")
+  if (dispatchNotify.includes("scanRouteDeviationsForCompany")) pass("route deviation scanner exists")
+  else fail("dispatch-event-notify.ts missing route deviation scan")
+} else {
+  fail("app/actions/dispatch-event-notify.ts missing")
+}
+
+if (numberFormats.includes("notify_on_dispatch") && dispatchSettingsUi.includes("notify_on_dispatch")) {
+  pass("notify_on_dispatch persisted from dispatch settings UI")
+} else {
+  fail("notify_on_dispatch not wired to number-formats persistence")
+}
+
+if (exists("lib/format-weight.ts") && loadSettingsUi.includes("weight_unit")) {
+  pass("formatLoadWeight helper exists for weight_unit display")
+} else {
+  fail("weight_unit formatting helper missing")
+}
+
+const migration238 = exists("supabase/migrations/238_20260614100000_add_dispatch_settings_and_notifications.sql")
+  ? read("supabase/migrations/238_20260614100000_add_dispatch_settings_and_notifications.sql")
+  : ""
+for (const col of ["notify_on_dispatch", "notify_on_check_call_missed", "notify_on_driver_late", "notify_on_route_deviation"]) {
+  if (migration238.includes(col) && numberFormats.includes(col)) pass(`migration 238 + settings: ${col}`)
+  else if (!migration238) fail("migration 238 file missing")
+  else fail(`migration 238 / settings mismatch: ${col}`)
+}
+
+if (vercelJson.includes("/api/cron/scan-dispatch-events")) {
+  pass("vercel.json schedules dispatch event scan")
+} else {
+  warn("vercel.json missing scan-dispatch-events cron entry")
+}
+
+if (loadsSrc.includes("dispatched") || loadsSrc.includes("isFirstDispatchTransition")) {
+  pass("loads.ts sends dispatched notifications on first schedule/in_transit")
+} else {
+  fail("loads.ts missing notify_on_dispatch wiring")
+}
+
+if (exists("lib/company-notification-channels.ts") && read("app/actions/notifications.ts").includes("companyAllowsEmail")) {
+  pass("sendNotification respects company notification_channels")
+} else {
+  fail("sendNotification missing notification_channels gating")
+}
+
+if (loadDispatchValidation.includes("emergency_contact_required") || loadDispatchValidation.includes("emergency_contact_phone")) {
+  pass("dispatch readiness enforces driver emergency contact when required")
+} else {
+  fail("getDispatchReadinessError missing emergency contact gate")
+}
+
+if (exists("lib/notify-load-event.ts") && read("app/actions/dispatches.ts").includes("notifyLoadOperationsEvent")) {
+  pass("quickAssignLoad sends dispatched notifications")
+} else if (exists("app/actions/load-notify.ts") && read("app/actions/dispatches.ts").includes("notifyLoadOperationsEvent")) {
+  pass("quickAssignLoad sends dispatched notifications")
+} else {
+  fail("quickAssignLoad missing dispatched notification wiring")
+}
+
+if (read("app/actions/check-calls.ts").includes("milestone")) {
+  pass("check calls support milestone scheduling when enabled")
+} else {
+  fail("scheduleCheckCallsForLoad missing milestone support")
+}
+
+if (read("lib/eld/geofence-detector.ts").includes("geofence_enabled")) {
+  pass("geofence cron respects company geofence_enabled setting")
+} else {
+  fail("geofence-detector missing geofence_enabled gate")
+}
+
+if (exists("app/actions/check-call-customer-notify.ts") && read("app/actions/check-calls.ts").includes("notifyCustomerBrokerForCheckCallEvent")) {
+  pass("check-call customer/broker email notifications wired on completion")
+} else {
+  fail("check-call customer/broker notifications not wired")
+}
+
+if (read("app/actions/loads.ts").includes("notifyCustomerBrokerForCheckCallEvent") && read("app/actions/loads.ts").includes("trip_start")) {
+  pass("trip_start customer/broker email on in_transit transition")
+} else {
+  fail("trip_start customer/broker notification missing from loads.ts")
+}
+
+if (read("app/actions/notifications.ts").includes("companyAllowsPush") && read("app/actions/notifications.ts").includes("sendPushToUser")) {
+  pass("sendNotification routes push channel when enabled")
+} else {
+  fail("sendNotification missing push channel routing")
+}
+
+if (exists("lib/operations-auto-assign-settings.ts") && read("lib/load-auto-assign.ts").includes("resolveEffectiveAutoAssignSettings")) {
+  pass("auto-assign merges dispatch driver assignment settings")
+} else {
+  fail("dispatch driver assignment settings not merged into auto-assign")
+}
+
+if (exists("app/actions/route-auto-optimize.ts") && read("app/actions/route-stops.ts").includes("maybeAutoOptimizeRouteAfterStopChange")) {
+  pass("auto_optimize_routes triggers after route stop changes")
+} else {
+  fail("auto_optimize_routes not wired to route stop creation")
+}
+
+if (read("lib/eld/geofence-detector.ts").includes("geofence_radius")) {
+  pass("geofence detector uses company geofence_radius default")
+} else {
+  fail("geofence_radius not applied in geofence detector")
+}
+
+if (read("app/api/eld/mobile/locations/route.ts").includes("track_driver_location") && read("app/api/eld/mobile/locations/route.ts").includes("location_update_interval")) {
+  pass("mobile location API respects tracking settings")
+} else {
+  fail("mobile location API missing tracking interval enforcement")
+}
+
+console.log("\n10. TypeScript config (build health)")
 const tsconfig = JSON.parse(read("tsconfig.json"))
 const staleIncludes = (tsconfig.include || []).filter((p) => String(p).includes(".cache/truckmates-next"))
 if (staleIncludes.length > 0) warn(`tsconfig.json includes stale cache paths: ${staleIncludes.join(", ")}`)

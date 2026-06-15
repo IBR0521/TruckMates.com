@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect } from "react"
-import { getOnboardingTourStatus, markOnboardingTourCompleted } from "@/app/actions/onboarding-tour"
+import { markOnboardingTourCompleted } from "@/app/actions/onboarding-tour"
+import { useDashboardShell } from "@/components/dashboard/shell-bootstrap-provider"
 
 function waitForElement(selector: string, timeoutMs = 8000) {
   const started = Date.now()
@@ -23,14 +24,14 @@ function waitForElement(selector: string, timeoutMs = 8000) {
 }
 
 export function FirstLoginTour() {
+  const shell = useDashboardShell()
+
   useEffect(() => {
+    if (!shell.data || shell.data.onboarding.completed) return
+
     let cancelled = false
 
     async function launch() {
-      const status = await getOnboardingTourStatus()
-      if (cancelled || status.error || !status.data) return
-      if (status.data.completed) return
-
       const shepherdModule = await import("shepherd.js")
       const Shepherd = shepherdModule.default
       const tour = new Shepherd.Tour({
@@ -112,7 +113,7 @@ export function FirstLoginTour() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [shell.data])
 
   return null
 }

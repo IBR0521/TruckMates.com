@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { getPlanFeatureGate } from "@/app/actions/plan-usage"
+import { useDashboardShell } from "@/components/dashboard/shell-bootstrap-provider"
 import {
   createConversation,
   getConversation,
@@ -148,6 +149,7 @@ async function streamAssistantReply(params: {
 
 export function AiChatWidget() {
   const voiceFeatureEnabled = isAiChatVoiceEnabled()
+  const shell = useDashboardShell()
   const [eligible, setEligible] = useState<boolean | null>(null)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -164,6 +166,12 @@ export function AiChatWidget() {
   const pendingDerived = useMemo(() => derivePendingFromMessages(messages), [messages])
 
   useEffect(() => {
+    if (shell.data) {
+      setEligible(shell.data.aiChatAllowed)
+      return
+    }
+    if (shell.loading) return
+
     let active = true
     getPlanFeatureGate("ai_chat")
       .then((res) => {
@@ -176,7 +184,7 @@ export function AiChatWidget() {
     return () => {
       active = false
     }
-  }, [])
+  }, [shell.data, shell.loading])
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })

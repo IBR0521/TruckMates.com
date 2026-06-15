@@ -8,8 +8,12 @@ import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkEditPermission } from "@/lib/server-permissions"
 import * as Sentry from "@sentry/nextjs"
-import { hasValidPermitAttachment } from "@/lib/permit-requirement"
-import { getDispatchGateErrors } from "@/lib/dispatch-gates"
+import {
+  canPromoteToScheduledOnAssign,
+  getDispatchReadinessError,
+  getRouteLoadsDispatchReadinessError,
+} from "@/lib/load-dispatch-validation"
+import { notifyLoadOperationsEvent } from "@/app/actions/load-notify"
 type DispatchScopedLoad = {
   terminal_id?: string | null
   status?: string | null
@@ -176,7 +180,7 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
   // Get current load to check status and company
   const { data: currentLoad, error: loadError } = await supabase
     .from("loads")
-    .select("status, company_id, requires_permit, load_date, estimated_delivery")
+    .select("status, company_id, requires_permit, load_date, estimated_delivery, driver_id, truck_id")
     .eq("id", loadId)
     .eq("company_id", ctx.companyId)
     .maybeSingle()
@@ -268,56 +272,28 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
   const updateData: AssignmentUpdateData = {}
   if (driverId) updateData.driver_id = driverId
   if (truckId) updateData.truck_id = truckId
-  
-  // Update status to scheduled if both driver and truck are assigned and status is pending
-  if (driverId && truckId && currentLoad?.status === "pending") {
-    const { data: companySettings } = await supabase
-      .from("company_settings")
-      .select("require_bol_before_dispatch, require_documents_before_dispatch, required_documents")
-      .eq("company_id", ctx.companyId)
-      .maybeSingle()
 
-    const [{ count: bolCount }, { data: loadDocs }] = await Promise.all([
-      supabase
-        .from("bols")
-        .select("id", { count: "exact", head: true })
-        .eq("company_id", ctx.companyId)
-        .eq("load_id", loadId),
-      supabase
-        .from("documents")
-        .select("type")
-        .eq("company_id", ctx.companyId)
-        .eq("load_id", loadId),
-    ])
+  const effectiveDriverId = driverId ?? currentLoad?.driver_id ?? null
+  const effectiveTruckId = truckId ?? currentLoad?.truck_id ?? null
+  const currentStatus = String(currentLoad?.status || "").toLowerCase()
 
-    const gateErrors = getDispatchGateErrors({
+  if (
+    effectiveDriverId &&
+    effectiveTruckId &&
+    canPromoteToScheduledOnAssign(currentStatus)
+  ) {
+    const dispatchError = await getDispatchReadinessError({
+      supabase,
+      companyId: ctx.companyId,
       loadId,
+      currentStatus,
       nextStatus: "scheduled",
-      settings: companySettings,
-      hasBol: (bolCount ?? 0) > 0,
-      attachedDocumentTypes: (loadDocs || []).map((d: { type?: string | null }) => String(d.type || "")),
+      requiresPermit: Boolean(currentLoad?.requires_permit),
+      truckId: effectiveTruckId,
+      driverId: effectiveDriverId,
     })
-    if (gateErrors.length > 0) {
-      return { error: gateErrors[0], data: null }
-    }
-
-    if (currentLoad.requires_permit) {
-      const today = new Date().toISOString().split("T")[0]
-      const { data: permits, error: permitError } = await supabase
-        .from("permits")
-        .select("id, expiry_date, document_id")
-        .eq("company_id", ctx.companyId)
-        .eq("load_id", loadId)
-      if (permitError) {
-        return { error: safeDbError(permitError), data: null }
-      }
-      const validPermit = hasValidPermitAttachment(permits, today)
-      if (!validPermit) {
-        return {
-          error: "This load requires an oversize/overweight permit attachment before dispatch.",
-          data: null,
-        }
-      }
+    if (dispatchError) {
+      return { error: dispatchError, data: null }
     }
     updateData.status = "scheduled"
   }
@@ -404,6 +380,22 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
 
   revalidatePath("/dashboard/dispatches")
   revalidatePath("/dashboard/loads")
+
+  if (data && updateData.status === "scheduled") {
+    void notifyLoadOperationsEvent(
+      supabase,
+      ctx.companyId,
+      {
+        driver_id: data.driver_id,
+        shipment_number: data.shipment_number,
+        status: data.status,
+        origin: data.origin,
+        destination: data.destination,
+      },
+      "dispatched",
+      { previousStatus: currentStatus, company_id: ctx.companyId },
+    ).catch((error) => Sentry.captureException(error))
+  }
   
   // Trigger webhook
   if (driverId) {
@@ -460,7 +452,7 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
   // Get current route status and company
   const { data: currentRoute, error: routeError } = await supabase
     .from("routes")
-    .select("status, company_id")
+    .select("status, company_id, driver_id, truck_id")
     .eq("id", routeId)
     .eq("company_id", userData.company_id)
     .maybeSingle()
@@ -519,9 +511,22 @@ export async function quickAssignRoute(routeId: string, driverId?: string, truck
   const updateData: AssignmentUpdateData = {}
   if (driverId) updateData.driver_id = driverId
   if (truckId) updateData.truck_id = truckId
-  
+
+  const effectiveDriverId = driverId ?? currentRoute?.driver_id ?? null
+  const effectiveTruckId = truckId ?? currentRoute?.truck_id ?? null
+
   // Update status to scheduled if both driver and truck are assigned and status is pending
-  if (driverId && truckId && currentRoute?.status === "pending") {
+  if (effectiveDriverId && effectiveTruckId && currentRoute?.status === "pending") {
+    const routeDispatchError = await getRouteLoadsDispatchReadinessError(
+      supabase,
+      userData.company_id,
+      routeId,
+      effectiveTruckId,
+      effectiveDriverId,
+    )
+    if (routeDispatchError) {
+      return { error: routeDispatchError, data: null }
+    }
     updateData.status = "scheduled"
   }
 

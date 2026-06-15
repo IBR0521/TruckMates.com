@@ -10,6 +10,8 @@ import { Switch } from "@/components/ui/switch"
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
 import { getCompanySettings, updateCompanySettings } from "@/app/actions/number-formats"
+import { LOAD_REQUIRED_DOCUMENT_TYPES } from "@/lib/load-dispatch-validation"
+import { ALL_LOAD_STATUSES } from "@/lib/load-status"
 import { Save, Package, Info, DollarSign, Settings, Route, Truck, Plus, Trash2, Edit2, Fuel } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
@@ -23,6 +25,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+
+const WORKFLOW_STATUS_OPTIONS = ALL_LOAD_STATUSES.filter(
+  (s) => s !== "draft" && s !== "completed" && s !== "cancelled",
+)
 
 export default function LoadSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -67,6 +73,7 @@ export default function LoadSettingsPage() {
     auto_assign_truck: false,
     require_bol_before_dispatch: false,
     require_documents_before_dispatch: false,
+    required_documents: [] as string[],
     
     // Auto-Assignment Rules
     assignment_priority: "proximity", // 'proximity', 'availability', 'experience', 'manual'
@@ -83,6 +90,7 @@ export default function LoadSettingsPage() {
     notify_on_status_change: true,
     notify_on_delivery: true,
     notify_driver_on_assignment: true,
+    notify_on_delivery_delay: true,
     
     // Route Settings
     auto_optimize_route: false,
@@ -169,16 +177,22 @@ export default function LoadSettingsPage() {
           auto_assign_truck: result.data.auto_assign_truck || false,
           require_bol_before_dispatch: result.data.require_bol_before_dispatch || false,
           require_documents_before_dispatch: result.data.require_documents_before_dispatch || false,
+          required_documents: Array.isArray(result.data.required_documents)
+            ? result.data.required_documents.map((v: unknown) => String(v))
+            : [],
           assignment_priority: result.data.assignment_priority || "proximity",
           consider_driver_hours: result.data.consider_driver_hours !== false,
           consider_truck_maintenance: result.data.consider_truck_maintenance !== false,
           max_distance_for_auto_assign: result.data.max_distance_for_auto_assign || 50,
           allow_status_skip: result.data.allow_status_skip || false,
-          required_statuses: result.data.required_statuses || ["pending", "scheduled", "in_transit", "delivered"],
+          required_statuses: Array.isArray(result.data.required_statuses)
+            ? result.data.required_statuses.map((v: unknown) => String(v))
+            : ["pending", "scheduled", "in_transit", "delivered"],
           notify_on_load_created: result.data.notify_on_load_created !== false,
           notify_on_status_change: result.data.notify_on_status_change !== false,
           notify_on_delivery: result.data.notify_on_delivery !== false,
           notify_driver_on_assignment: result.data.notify_driver_on_assignment !== false,
+          notify_on_delivery_delay: result.data.notify_on_delivery_delay !== false,
           auto_optimize_route: result.data.auto_optimize_route || false,
           route_optimization_method: result.data.route_optimization_method || "distance",
           allow_multi_stop: result.data.allow_multi_stop !== false,
@@ -752,6 +766,34 @@ export default function LoadSettingsPage() {
                 />
               </div>
 
+              {settings.require_documents_before_dispatch && (
+                <div className="rounded-lg border border-border p-4 space-y-3">
+                  <p className="text-sm font-medium text-foreground">Required document types</p>
+                  <p className="text-xs text-muted-foreground">
+                    Loads cannot dispatch until each selected type is attached on the load.
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {LOAD_REQUIRED_DOCUMENT_TYPES.map((docType) => {
+                      const checked = settings.required_documents.includes(docType)
+                      return (
+                        <label key={docType} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(value) => {
+                              const next = value
+                                ? [...settings.required_documents, docType]
+                                : settings.required_documents.filter((t: string) => t !== docType)
+                              setSettings({ ...settings, required_documents: next })
+                            }}
+                          />
+                          <span className="capitalize">{docType.replace(/_/g, " ")}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between">
                 <div>
                   <Label htmlFor="allow_skip">Allow Status Skip</Label>
@@ -763,6 +805,38 @@ export default function LoadSettingsPage() {
                   onCheckedChange={(checked) => setSettings({ ...settings, allow_status_skip: checked })}
                 />
               </div>
+
+              {settings.allow_status_skip && (
+                <div className="rounded-lg border border-border p-4 space-y-3">
+                  <p className="text-sm font-medium text-foreground">Allowed workflow statuses</p>
+                  <p className="text-xs text-muted-foreground">
+                    When status skip is enabled, loads may only move to the selected statuses (in any order).
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {WORKFLOW_STATUS_OPTIONS.map((status) => {
+                      const checked = settings.required_statuses.includes(status)
+                      return (
+                        <label key={status} className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(value) => {
+                              const next = value
+                                ? [...settings.required_statuses, status]
+                                : settings.required_statuses.filter((s: string) => s !== status)
+                              if (next.length === 0) {
+                                toast.error("At least one workflow status is required")
+                                return
+                              }
+                              setSettings({ ...settings, required_statuses: next })
+                            }}
+                          />
+                          <span className="capitalize">{status.replace(/_/g, " ")}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </Card>
 
@@ -976,6 +1050,20 @@ export default function LoadSettingsPage() {
                   id="notify_driver"
                   checked={settings.notify_driver_on_assignment}
                   onCheckedChange={(checked) => setSettings({ ...settings, notify_driver_on_assignment: checked })}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label htmlFor="notify_delay">Notify on Delivery Delay</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Alert managers when active loads pass their estimated delivery time
+                  </p>
+                </div>
+                <Switch
+                  id="notify_delay"
+                  checked={settings.notify_on_delivery_delay}
+                  onCheckedChange={(checked) => setSettings({ ...settings, notify_on_delivery_delay: checked })}
                 />
               </div>
             </div>

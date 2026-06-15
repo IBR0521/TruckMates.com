@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
+import * as Sentry from "@sentry/nextjs"
 // Get all stops for a route
 export async function getRouteStops(routeId: string) {
   try {
@@ -175,6 +176,11 @@ export async function createRouteStop(routeId: string, stopData: {
 
     revalidatePath(`/dashboard/routes/${routeId}`)
     revalidatePath("/dashboard/routes")
+
+    const { maybeAutoOptimizeRouteAfterStopChange } = await import("./route-auto-optimize")
+    maybeAutoOptimizeRouteAfterStopChange(routeId, ctx.companyId).catch((err) => {
+      Sentry.captureException(err)
+    })
 
     return { data: stop, error: null }
   } catch (error: unknown) {

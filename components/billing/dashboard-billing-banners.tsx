@@ -4,12 +4,13 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { getBillingPlanContext, getCompanyPlanUsageSnapshot } from "@/app/actions/plan-usage"
+import { useDashboardShell } from "@/components/dashboard/shell-bootstrap-provider"
 
 const TRIAL_BANNER_KEY = "tm:dismiss-trial-banner"
 const WARN_PREFIX = "tm:dismiss-quota-warning:"
 
 export function DashboardBillingBanners() {
+  const shell = useDashboardShell()
   const [trialDismissed, setTrialDismissed] = useState(true)
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null)
   const [trialDaysLeft, setTrialDaysLeft] = useState<number | null>(null)
@@ -18,68 +19,58 @@ export function DashboardBillingBanners() {
   useEffect(() => {
     if (typeof window === "undefined") return
     setTrialDismissed(sessionStorage.getItem(TRIAL_BANNER_KEY) === "1")
-
-    let active = true
-    void (async () => {
-      try {
-        const [ctxSnap, usageSnap] = await Promise.all([getBillingPlanContext(), getCompanyPlanUsageSnapshot()])
-        if (!active) return
-        const st = ctxSnap.data?.subscription_status
-        const ends = ctxSnap.data?.trial_ends_at
-        if (st === "trial" && ends && new Date(ends).getTime() > Date.now()) {
-          setTrialEndsAt(ends)
-          const days = Math.max(1, Math.ceil((new Date(ends).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-          setTrialDaysLeft(days)
-        } else {
-          setTrialEndsAt(null)
-          setTrialDaysLeft(null)
-        }
-
-        const warnings: string[] = []
-        if (usageSnap.data?.metered) {
-          const m = usageSnap.data.metered
-          ;(
-            [
-              ["loads", "Loads this month", m.loads],
-              ["sms", "SMS this month", m.sms],
-              ["ai_calls", "AI calls this month", m.ai],
-            ] as const
-          ).forEach(([id, label, snap]) => {
-            if (
-              typeof snap.limit === "number" &&
-              snap.limit > 0 &&
-              snap.warningThreshold &&
-              !snap.hardCap &&
-              sessionStorage.getItem(WARN_PREFIX + id) !== "1"
-            ) {
-              warnings.push(
-                `${label}: ${snap.percentUsed}% of your monthly quota (${snap.used}/${snap.limit}). Consider upgrading.`,
-              )
-            }
-            if (
-              typeof snap.limit === "number" &&
-              snap.limit > 0 &&
-              snap.hardCap &&
-              sessionStorage.getItem(WARN_PREFIX + id + ":cap") !== "1"
-            ) {
-              warnings.push(`${label}: quota exhausted (${snap.used}/${snap.limit}). Upgrade to continue.` )
-            }
-          })
-        }
-        setQuotaMsgs(warnings)
-      } catch {
-        if (active) {
-          setTrialEndsAt(null)
-          setTrialDaysLeft(null)
-          setQuotaMsgs([])
-        }
-      }
-    })()
-
-    return () => {
-      active = false
-    }
   }, [])
+
+  useEffect(() => {
+    if (!shell.data) return
+
+    const ctxSnap = shell.data.billing
+    const usageSnap = shell.data.usage
+
+    const st = ctxSnap.subscription_status
+    const ends = ctxSnap.trial_ends_at
+    if (st === "trial" && ends && new Date(ends).getTime() > Date.now()) {
+      setTrialEndsAt(ends)
+      const days = Math.max(1, Math.ceil((new Date(ends).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+      setTrialDaysLeft(days)
+    } else {
+      setTrialEndsAt(null)
+      setTrialDaysLeft(null)
+    }
+
+    const warnings: string[] = []
+    if (usageSnap.metered) {
+      const m = usageSnap.metered
+      ;(
+        [
+          ["loads", "Loads this month", m.loads],
+          ["sms", "SMS this month", m.sms],
+          ["ai_calls", "AI calls this month", m.ai],
+        ] as const
+      ).forEach(([id, label, snap]) => {
+        if (
+          typeof snap.limit === "number" &&
+          snap.limit > 0 &&
+          snap.warningThreshold &&
+          !snap.hardCap &&
+          sessionStorage.getItem(WARN_PREFIX + id) !== "1"
+        ) {
+          warnings.push(
+            `${label}: ${snap.percentUsed}% of your monthly quota (${snap.used}/${snap.limit}). Consider upgrading.`,
+          )
+        }
+        if (
+          typeof snap.limit === "number" &&
+          snap.limit > 0 &&
+          snap.hardCap &&
+          sessionStorage.getItem(WARN_PREFIX + id + ":cap") !== "1"
+        ) {
+          warnings.push(`${label}: quota exhausted (${snap.used}/${snap.limit}). Upgrade to continue.`)
+        }
+      })
+    }
+    setQuotaMsgs(warnings)
+  }, [shell.data])
 
   function dismissTrial() {
     try {

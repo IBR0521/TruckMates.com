@@ -27,6 +27,10 @@ import { useRouter } from "next/navigation"
 import { use } from "react"
 import { GoogleMapsRoute } from "@/components/google-maps-route"
 import { getLoad, updateLoad } from "@/app/actions/loads"
+import { getCompanySettings } from "@/app/actions/number-formats"
+import { formatLoadWeight, type WeightUnit } from "@/lib/format-weight"
+import { quickAssignLoad } from "@/app/actions/dispatches"
+import { ensureDispatchConfirmed } from "@/lib/dispatch-confirm-client"
 import { getRoutes } from "@/app/actions/routes"
 import { getTrucks } from "@/app/actions/trucks"
 import { getLoadDeliveryPoints, getLoadSummary } from "@/app/actions/load-delivery-points"
@@ -88,6 +92,160 @@ type RouteDataWithCompatibility = RouteData & {
   _compatibilityReasons?: string[]
 }
 
+function pickBestMatchingRoute(
+  loadData: LoadData,
+  routeRows: RouteData[],
+): RouteDataWithCompatibility | null {
+  const normalizedWeight =
+    typeof loadData.weight === "string"
+      ? Number(loadData.weight.replace(/[^0-9.]/g, "")) || 0
+      : Number(loadData.weight || 0)
+  const loadWeightKg = Number(loadData.weight_kg || 0) || (normalizedWeight ? normalizedWeight * 1000 : 0)
+
+  let truckHeight = 4.0
+
+  const normalizeLocation = (location: string) => {
+    if (!location) return ""
+    return location.toLowerCase().replace(/,/g, "").replace(/\s+/g, " ").trim()
+  }
+
+  const loadOriginNormalized = normalizeLocation(loadData.origin || "")
+  const loadDestNormalized = normalizeLocation(loadData.destination || "")
+
+  const matchingRoutes = routeRows.filter((route: RouteData) => {
+    const routeOriginNormalized = normalizeLocation(route.origin || "")
+    const routeDestNormalized = normalizeLocation(route.destination || "")
+
+    const originMatch =
+      routeOriginNormalized &&
+      loadOriginNormalized &&
+      (routeOriginNormalized.includes(loadOriginNormalized) ||
+        loadOriginNormalized.includes(routeOriginNormalized) ||
+        routeOriginNormalized.split(" ")[0] === loadOriginNormalized.split(" ")[0])
+
+    const destMatch =
+      routeDestNormalized &&
+      loadDestNormalized &&
+      (routeDestNormalized.includes(loadDestNormalized) ||
+        loadDestNormalized.includes(routeDestNormalized) ||
+        routeDestNormalized.split(" ")[0] === loadDestNormalized.split(" ")[0])
+
+    return originMatch && destMatch
+  })
+
+  const scoredRoutes: ScoredRoute[] = matchingRoutes.map((route: RouteData) => {
+    let score = 0
+    const reasons: string[] = []
+
+    if (
+      route.origin?.toLowerCase() === loadData.origin?.toLowerCase() &&
+      route.destination?.toLowerCase() === loadData.destination?.toLowerCase()
+    ) {
+      score += 100
+      reasons.push("Exact origin and destination match")
+    } else {
+      score += 50
+      reasons.push("Partial location match")
+    }
+
+    if (route.truck_id) {
+      score += 30
+      reasons.push("Route assigned to specific truck")
+      if (route.truck_id === loadData.truck_id) {
+        score += 50
+        reasons.push("Route matches assigned truck")
+      }
+    }
+
+    if (route.status === "scheduled" || route.status === "in_progress") {
+      score += 20
+      reasons.push("Route is active/scheduled")
+    } else if (route.status === "pending") {
+      score += 10
+    }
+
+    if (route.priority === "high") {
+      score += 15
+      reasons.push("High priority route")
+    }
+
+    if (route.waypoints && Array.isArray(route.waypoints) && route.waypoints.length > 0) {
+      score += 10
+      reasons.push("Route has detailed waypoints")
+    }
+
+    if (route.distance && route.estimated_time) {
+      score += 10
+      reasons.push("Route has complete distance/time info")
+    }
+
+    if (loadWeightKg > 36000) {
+      if (
+        route.name?.toLowerCase().includes("truck") ||
+        route.name?.toLowerCase().includes("highway") ||
+        route.name?.toLowerCase().includes("i-") ||
+        route.name?.toLowerCase().includes("us-")
+      ) {
+        score += 25
+        reasons.push("Route suitable for heavy loads (truck routes/highways)")
+      }
+    }
+
+    const isHazmat =
+      loadData.contents?.toLowerCase().includes("chemical") ||
+      loadData.contents?.toLowerCase().includes("hazard") ||
+      loadData.contents?.toLowerCase().includes("hazmat")
+    if (isHazmat) {
+      if (
+        route.special_instructions?.toLowerCase().includes("hazmat") ||
+        route.special_instructions?.toLowerCase().includes("no tunnel")
+      ) {
+        score += 20
+        reasons.push("Route compatible with hazmat cargo")
+      }
+    }
+
+    if (truckHeight > 4.2) {
+      if (
+        route.special_instructions?.toLowerCase().includes("clearance") ||
+        route.special_instructions?.toLowerCase().includes("bridge")
+      ) {
+        score += 15
+        reasons.push("Route considers height restrictions")
+      }
+    }
+
+    return { route, score, reasons }
+  })
+
+  scoredRoutes.sort((a, b) => b.score - a.score)
+
+  if (loadData.route_id) {
+    const specificRoute = routeRows.find((r: RouteData) => r.id === loadData.route_id)
+    if (specificRoute) {
+      const existingIndex = scoredRoutes.findIndex((sr) => sr.route.id === specificRoute.id)
+      if (existingIndex >= 0) {
+        scoredRoutes[existingIndex].score += 200
+        scoredRoutes[existingIndex].reasons.push("This is the assigned route for this load")
+      } else {
+        scoredRoutes.unshift({
+          route: specificRoute,
+          score: 200,
+          reasons: ["This is the assigned route for this load"],
+        })
+      }
+      scoredRoutes.sort((a, b) => b.score - a.score)
+    }
+  }
+
+  const bestRoute = scoredRoutes.length > 0 ? (scoredRoutes[0].route as RouteDataWithCompatibility) : null
+  if (bestRoute && scoredRoutes.length > 0) {
+    bestRoute._compatibilityScore = scoredRoutes[0].score
+    bestRoute._compatibilityReasons = scoredRoutes[0].reasons
+  }
+  return bestRoute
+}
+
 function hasRequiredUpgrade(value: unknown): value is { upgrade?: { required?: boolean } } {
   if (!value || typeof value !== "object" || !("upgrade" in value)) return false
   const upgrade = (value as { upgrade?: unknown }).upgrade
@@ -128,6 +286,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
   const [portalReviewMessage, setPortalReviewMessage] = useState("")
   const [portalQuotedRate, setPortalQuotedRate] = useState("")
   const [isSubmittingPortalReview, setIsSubmittingPortalReview] = useState(false)
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>("lbs")
   const [permitForm, setPermitForm] = useState({
     permit_number: "",
     issuing_state: "",
@@ -153,6 +312,15 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    getCompanySettings()
+      .then((result) => {
+        const unit = result.data?.weight_unit === "kg" ? "kg" : "lbs"
+        setWeightUnit(unit)
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -182,264 +350,99 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
 
   useEffect(() => {
     let isMounted = true
-    
-    async function loadData() {
-      if (!id || id === "add" || !isMounted) return
-      
-      setIsLoading(true)
-      
+
+    async function loadSecondaryData(loadData: LoadData) {
       try {
-      // Fetch load data
-      const loadResult = await getLoad(id)
-        if (!isMounted) return
-        
-      if (loadResult.error) {
-        toast.error(loadResult.error || "Failed to load load details")
-          if (isMounted) setIsLoading(false)
-        return
-      }
-      
-      if (loadResult.data) {
-        setLoad(loadResult.data)
-        
-        // Fetch delivery points if multi-delivery load
-        if (loadResult.data.delivery_type === "multi") {
-          const deliveryPointsResult = await getLoadDeliveryPoints(id)
-            if (isMounted && deliveryPointsResult.data) {
-            setDeliveryPoints(deliveryPointsResult.data)
-          }
-          
-          const summaryResult = await getLoadSummary(id)
-            if (isMounted && summaryResult.data) {
-            setLoadSummary(summaryResult.data)
-          }
-        }
-        
-        // Fetch truck data directly by ID if load has truck_id (optimized - no need to fetch all trucks)
-        if (loadResult.data.truck_id) {
-          const { getTruck } = await import("@/app/actions/trucks")
-          const truckResult = await getTruck(loadResult.data.truck_id)
-            if (isMounted && truckResult.data) {
-            setTruck(truckResult.data)
-          }
-        }
-        
-        // Fetch related invoice directly by load_id if load is delivered (optimized)
-        if (loadResult.data.status === "delivered") {
-          const { getInvoices } = await import("@/app/actions/accounting")
-          const invoicesResult = await getInvoices({ load_id: id, limit: 1 })
-            if (isMounted && invoicesResult.data && invoicesResult.data.length > 0) {
-            setRelatedInvoice(invoicesResult.data[0])
-          }
+        const secondaryTasks: Promise<void>[] = []
+
+        if (loadData.delivery_type === "multi") {
+          secondaryTasks.push(
+            (async () => {
+              const [deliveryPointsResult, summaryResult] = await Promise.all([
+                getLoadDeliveryPoints(id),
+                getLoadSummary(id),
+              ])
+              if (!isMounted) return
+              if (deliveryPointsResult.data) setDeliveryPoints(deliveryPointsResult.data)
+              if (summaryResult.data) setLoadSummary(summaryResult.data)
+            })(),
+          )
         }
 
-        // Fetch routes with limit (optimized - only need a few for matching)
-        const routesResult = await getRoutes({ limit: 50 })
-          if (!isMounted) return
-          
-        setRoutesResult(routesResult)
-        if (routesResult.data) {
-          // Calculate load weight in kg
-          const normalizedWeight =
-            typeof loadResult.data.weight === "string"
-              ? Number(loadResult.data.weight.replace(/[^0-9.]/g, "")) || 0
-              : Number(loadResult.data.weight || 0)
-          const loadWeightKg = Number(loadResult.data.weight_kg || 0) || (normalizedWeight ? normalizedWeight * 1000 : 0)
-          
-          // Get truck dimensions if available
-          let truckHeight = 4.0 // default in meters
-          let truckMaxWeight = 80000 // default in lbs (80,000 lbs = ~36,000 kg)
-          
-          // Check if truck is assigned (truck state is set asynchronously, so check truck_id from load)
-          if (loadResult.data.truck_id) {
-            // Estimate truck height from type (if available) or use default
-            // Standard semi-truck height is typically 4.0-4.2m
-            truckHeight = 4.2 // Default for semi-trucks
-            // Max weight from truck specs if available (assuming it's stored as string)
-            // Note: This would need to be added to the truck schema if not already there
-          }
-          
-          // Find routes that match the load's origin and destination
-          // More flexible matching: extract city/state from both sides
-          const normalizeLocation = (location: string) => {
-            if (!location) return ""
-            // Remove common suffixes and normalize
-            return location.toLowerCase()
-              .replace(/,/g, "")
-              .replace(/\s+/g, " ")
-              .trim()
-          }
-          
-          const loadOriginNormalized = normalizeLocation(loadResult.data.origin || "")
-          const loadDestNormalized = normalizeLocation(loadResult.data.destination || "")
-          
-          const routeRows = (routesResult.data || []) as RouteData[]
-          const matchingRoutes = routeRows.filter((route: RouteData) => {
-            const routeOriginNormalized = normalizeLocation(route.origin || "")
-            const routeDestNormalized = normalizeLocation(route.destination || "")
-            
-            // Check if any part of the location matches (more flexible)
-            const originMatch = 
-              routeOriginNormalized && loadOriginNormalized &&
-              (routeOriginNormalized.includes(loadOriginNormalized) ||
-               loadOriginNormalized.includes(routeOriginNormalized) ||
-               // Extract city name (first word) for partial matching
-               routeOriginNormalized.split(" ")[0] === loadOriginNormalized.split(" ")[0])
-            
-            const destMatch = 
-              routeDestNormalized && loadDestNormalized &&
-              (routeDestNormalized.includes(loadDestNormalized) ||
-               loadDestNormalized.includes(routeDestNormalized) ||
-               // Extract city name (first word) for partial matching
-               routeDestNormalized.split(" ")[0] === loadDestNormalized.split(" ")[0])
-            
-            return originMatch && destMatch
-          })
-          
-          // Score and rank routes based on truck compatibility
-          const scoredRoutes: ScoredRoute[] = matchingRoutes.map((route: RouteData) => {
-            let score = 0
-            const reasons: string[] = []
-            
-            // Exact match gets highest score
-            if (route.origin?.toLowerCase() === loadResult.data.origin?.toLowerCase() &&
-                route.destination?.toLowerCase() === loadResult.data.destination?.toLowerCase()) {
-              score += 100
-              reasons.push("Exact origin and destination match")
-            } else {
-              score += 50
-              reasons.push("Partial location match")
-            }
-            
-            // Check if route is assigned to a truck (truck-specific route)
-            if (route.truck_id) {
-              score += 30
-              reasons.push("Route assigned to specific truck")
-              // Bonus if it matches the load's truck
-              if (route.truck_id === loadResult.data.truck_id) {
-                score += 50
-                reasons.push("Route matches assigned truck")
+        if (loadData.truck_id) {
+          secondaryTasks.push(
+            (async () => {
+              const { getTruck } = await import("@/app/actions/trucks")
+              const truckResult = await getTruck(loadData.truck_id!)
+              if (isMounted && truckResult.data) setTruck(truckResult.data)
+            })(),
+          )
+        }
+
+        if (loadData.status === "delivered") {
+          secondaryTasks.push(
+            (async () => {
+              const invoicesResult = await getInvoices({ load_id: id, limit: 1 })
+              if (isMounted && invoicesResult.data && invoicesResult.data.length > 0) {
+                setRelatedInvoice(invoicesResult.data[0])
               }
+            })(),
+          )
+        }
+
+        secondaryTasks.push(
+          (async () => {
+            const routesResult = await getRoutes({ limit: 50 })
+            if (!isMounted) return
+            setRoutesResult(routesResult)
+            if (routesResult.data) {
+              setMatchingRoute(pickBestMatchingRoute(loadData, routesResult.data as RouteData[]) || null)
             }
-            
-            // Check route status (prefer active/scheduled routes)
-            if (route.status === "scheduled" || route.status === "in_progress") {
-              score += 20
-              reasons.push("Route is active/scheduled")
-            } else if (route.status === "pending") {
-              score += 10
-            }
-            
-            // Check priority (high priority routes get bonus)
-            if (route.priority === "high") {
-              score += 15
-              reasons.push("High priority route")
-            }
-            
-            // Check if route has waypoints (more detailed = better)
-            if (route.waypoints && Array.isArray(route.waypoints) && route.waypoints.length > 0) {
-              score += 10
-              reasons.push("Route has detailed waypoints")
-            }
-            
-            // Check if route has distance/time info (more complete = better)
-            if (route.distance && route.estimated_time) {
-              score += 10
-              reasons.push("Route has complete distance/time info")
-            }
-            
-            // Truck compatibility checks
-            // Check if route is suitable for heavy loads
-            if (loadWeightKg > 36000) { // Heavy load (>36,000 kg)
-              // Prefer routes that explicitly mention truck routes or highways
-              if (route.name?.toLowerCase().includes("truck") || 
-                  route.name?.toLowerCase().includes("highway") ||
-                  route.name?.toLowerCase().includes("i-") ||
-                  route.name?.toLowerCase().includes("us-")) {
-                score += 25
-                reasons.push("Route suitable for heavy loads (truck routes/highways)")
-              }
-            }
-            
-            // Check hazmat compatibility
-            const isHazmat = loadResult.data.contents?.toLowerCase().includes("chemical") ||
-                            loadResult.data.contents?.toLowerCase().includes("hazard") ||
-                            loadResult.data.contents?.toLowerCase().includes("hazmat")
-            if (isHazmat) {
-              // Prefer routes that avoid tunnels or have hazmat info
-              if (route.special_instructions?.toLowerCase().includes("hazmat") ||
-                  route.special_instructions?.toLowerCase().includes("no tunnel")) {
-                score += 20
-                reasons.push("Route compatible with hazmat cargo")
-              }
-            }
-            
-            // Check truck height restrictions
-            if (truckHeight > 4.2) {
-              // Prefer routes with height clearance info
-              if (route.special_instructions?.toLowerCase().includes("clearance") ||
-                  route.special_instructions?.toLowerCase().includes("bridge")) {
-                score += 15
-                reasons.push("Route considers height restrictions")
-              }
-            }
-            
-            return { route, score, reasons }
-          })
-          
-          // Sort by score (highest first)
-          scoredRoutes.sort((a, b) => b.score - a.score)
-          
-          // If load has a route_id, prioritize that route
-          if (loadResult.data.route_id) {
-            const specificRoute = routeRows.find((r: RouteData) => r.id === loadResult.data.route_id)
-            if (specificRoute) {
-              // Find it in scored routes or add it
-              const existingIndex = scoredRoutes.findIndex((sr) => sr.route.id === specificRoute.id)
-              if (existingIndex >= 0) {
-                // Boost its score
-                scoredRoutes[existingIndex].score += 200
-                scoredRoutes[existingIndex].reasons.push("This is the assigned route for this load")
-              } else {
-                // Add it at the top
-                scoredRoutes.unshift({
-                  route: specificRoute,
-                  score: 200,
-                  reasons: ["This is the assigned route for this load"]
-                })
-              }
-              // Re-sort
-              scoredRoutes.sort((a, b) => b.score - a.score)
-            }
-          }
-          
-          // Get the best route
-          const bestRoute = scoredRoutes.length > 0 ? (scoredRoutes[0].route as RouteDataWithCompatibility) : null
-          
-          // Store route compatibility info
-          if (bestRoute && scoredRoutes.length > 0) {
-            bestRoute._compatibilityScore = scoredRoutes[0].score
-            bestRoute._compatibilityReasons = scoredRoutes[0].reasons
-          }
-          
-          setMatchingRoute(bestRoute || null)
+          })(),
+        )
+
+        await Promise.all(secondaryTasks)
+      } catch (error: unknown) {
+        if (isMounted) {
+          console.error("[LoadDetail] Secondary load failed:", error)
         }
       }
+    }
+
+    async function loadData() {
+      if (!id || id === "add" || !isMounted) return
+
+      setIsLoading(true)
+
+      try {
+        const loadResult = await getLoad(id)
+        if (!isMounted) return
+
+        if (loadResult.error) {
+          toast.error(loadResult.error || "Failed to load load details")
+          return
+        }
+
+        if (loadResult.data) {
+          setLoad(loadResult.data)
+          setIsLoading(false)
+          void loadSecondaryData(loadResult.data)
+        }
       } catch (error: unknown) {
         if (isMounted) {
           toast.error(errorMessage(error, "Failed to load load details"))
         }
       } finally {
         if (isMounted) {
-      setIsLoading(false)
+          setIsLoading(false)
         }
       }
     }
-    
+
     if (id && id !== "add") {
       loadData()
     }
-    
+
     return () => {
       isMounted = false
     }
@@ -684,29 +687,33 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
         return
       }
 
-      const assignmentResult = await updateLoad(id, {
-        driver_id: selectedDispatchDriverId,
-        truck_id: selectedDispatchTruckId,
-      })
-      if (assignmentResult.error) {
-        toast.error(assignmentResult.error)
+      if (!(await ensureDispatchConfirmed())) return
+
+      const result = await quickAssignLoad(
+        id,
+        selectedDispatchDriverId,
+        selectedDispatchTruckId,
+      )
+      if (result.error) {
+        toast.error(result.error)
         return
       }
 
-      if (load.status === "pending" || load.status === "draft" || load.status === "confirmed") {
-        const result = await updateLoad(id, { status: "scheduled" })
-        if (result.error) {
-          toast.error(result.error)
-          return
-        }
-        setLoad((prev: LoadData | null) => (prev ? { ...prev, status: "scheduled" } : prev))
+      const refreshed = await getLoad(id)
+      if (refreshed.data) {
+        setLoad(refreshed.data as LoadData)
+      } else {
+        setLoad((prev: LoadData | null) =>
+          prev
+            ? {
+                ...prev,
+                driver_id: selectedDispatchDriverId,
+                truck_id: selectedDispatchTruckId,
+                status: "scheduled",
+              }
+            : prev,
+        )
       }
-
-      setLoad((prev: LoadData | null) => (prev ? {
-        ...prev,
-        driver_id: selectedDispatchDriverId,
-        truck_id: selectedDispatchTruckId,
-      } : prev))
       toast.success("Load dispatched successfully.")
       setIsDispatchDialogOpen(false)
     } catch (error: unknown) {
@@ -748,13 +755,6 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
       }
 
       setRelatedInvoice(invoiceResult.data)
-
-      if (load?.status === "pending" || load?.status === "draft" || load?.status === "confirmed") {
-        const statusResult = await updateLoad(id, { status: "scheduled" })
-        if (!statusResult.error) {
-          setLoad((prev: LoadData | null) => (prev ? { ...prev, status: "scheduled" } : prev))
-        }
-      }
 
       setIsInvoiceDialogOpen(false)
       toast.success("Invoice created.")
@@ -1493,10 +1493,7 @@ export default function LoadDetailPage({ params }: { params: Promise<{ id: strin
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <p className="text-xs uppercase tracking-wider text-zinc-500">Weight</p>
-                  <p className="mt-1 text-base text-white">
-                    {load.weight || (load.weight_kg ? `${(load.weight_kg / 1000).toFixed(1)} tons` : "N/A")}
-                    {load.weight_kg ? ` (${load.weight_kg.toLocaleString()} kg)` : ""}
-                  </p>
+                  <p className="mt-1 text-base text-white">{formatLoadWeight(load, weightUnit)}</p>
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wider text-zinc-500">Contents</p>

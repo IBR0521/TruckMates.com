@@ -20,12 +20,22 @@ const COMPANY_SETTINGS_SELECT = `
   check_call_notify_pickup_completed, check_call_notify_enroute, check_call_notify_at_consignee, check_call_notify_dropoff_completed,
   factoring_company_name, factoring_submission_email, factoring_include_bol, factoring_include_rate_conf, factoring_include_pod, factoring_email_template, factoring_auto_submit,
   triumphpay_enabled, triumphpay_api_base_url, triumphpay_api_key, triumphpay_api_secret,
-  require_bol_before_dispatch, require_documents_before_dispatch,
+  require_bol_before_dispatch, require_documents_before_dispatch, required_documents,
   auto_assign_driver, auto_assign_truck, allow_status_skip, assignment_priority,
   consider_driver_hours, consider_truck_maintenance, max_distance_for_auto_assign,
   default_status, weight_unit, distance_unit, temperature_unit,
   require_confirmation_before_dispatch, dispatch_approval_required,
   auto_dispatch_on_ready, allow_bulk_dispatch,
+  notify_on_load_created, notify_on_status_change, notify_on_delivery,
+  notify_driver_on_assignment, notify_on_delivery_delay, required_statuses,
+  require_check_call_at_milestones, check_call_timeout_minutes, auto_escalate_missed_calls,
+  driver_assignment_method, consider_driver_proximity, consider_driver_experience,
+  max_assignment_distance, preferred_driver_priority, auto_optimize_routes,
+  route_optimization_algorithm, consider_traffic, consider_tolls, allow_route_deviations,
+  max_route_deviation_miles, notify_on_dispatch, notify_on_check_call_missed,
+  notify_on_driver_late, notify_on_route_deviation, notification_channels,
+  track_driver_location, location_update_interval, geofence_enabled, geofence_radius,
+  emergency_contact_required, auto_notify_on_emergency, emergency_escalation_minutes,
   created_at, updated_at
 `
 
@@ -188,6 +198,7 @@ export async function updateCompanySettings(settings: {
   triumphpay_api_secret?: string | null
   require_bol_before_dispatch?: boolean
   require_documents_before_dispatch?: boolean
+  required_documents?: string[]
   auto_assign_driver?: boolean
   auto_assign_truck?: boolean
   allow_status_skip?: boolean
@@ -203,6 +214,38 @@ export async function updateCompanySettings(settings: {
   dispatch_approval_required?: boolean
   auto_dispatch_on_ready?: boolean
   allow_bulk_dispatch?: boolean
+  notify_on_load_created?: boolean
+  notify_on_status_change?: boolean
+  notify_on_delivery?: boolean
+  notify_driver_on_assignment?: boolean
+  notify_on_delivery_delay?: boolean
+  required_statuses?: string[]
+  require_check_call_at_milestones?: boolean
+  check_call_timeout_minutes?: number
+  auto_escalate_missed_calls?: boolean
+  driver_assignment_method?: string
+  consider_driver_proximity?: boolean
+  consider_driver_experience?: boolean
+  max_assignment_distance?: number
+  preferred_driver_priority?: boolean
+  auto_optimize_routes?: boolean
+  route_optimization_algorithm?: string
+  consider_traffic?: boolean
+  consider_tolls?: boolean
+  allow_route_deviations?: boolean
+  max_route_deviation_miles?: number
+  notify_on_dispatch?: boolean
+  notify_on_check_call_missed?: boolean
+  notify_on_driver_late?: boolean
+  notify_on_route_deviation?: boolean
+  notification_channels?: string[]
+  track_driver_location?: boolean
+  location_update_interval?: number
+  geofence_enabled?: boolean
+  geofence_radius?: number
+  emergency_contact_required?: boolean
+  auto_notify_on_emergency?: boolean
+  emergency_escalation_minutes?: number
   // HIGH FIX 3: Removed broad index signatures to prevent arbitrary column injection
 }) {
   const supabase = await createClient()
@@ -236,12 +279,22 @@ export async function updateCompanySettings(settings: {
     'factoring_company_name', 'factoring_submission_email', 'factoring_include_bol', 'factoring_include_rate_conf',
     'factoring_include_pod', 'factoring_email_template', 'factoring_auto_submit',
     'triumphpay_enabled', 'triumphpay_api_base_url', 'triumphpay_api_key', 'triumphpay_api_secret',
-    'require_bol_before_dispatch', 'require_documents_before_dispatch',
+    'require_bol_before_dispatch', 'require_documents_before_dispatch', 'required_documents',
     'auto_assign_driver', 'auto_assign_truck', 'allow_status_skip', 'assignment_priority',
     'consider_driver_hours', 'consider_truck_maintenance', 'max_distance_for_auto_assign',
     'default_status', 'weight_unit', 'distance_unit', 'temperature_unit',
     'require_confirmation_before_dispatch', 'dispatch_approval_required',
     'auto_dispatch_on_ready', 'allow_bulk_dispatch',
+    'notify_on_load_created', 'notify_on_status_change', 'notify_on_delivery',
+    'notify_driver_on_assignment', 'notify_on_delivery_delay', 'required_statuses',
+    'require_check_call_at_milestones', 'check_call_timeout_minutes', 'auto_escalate_missed_calls',
+    'driver_assignment_method', 'consider_driver_proximity', 'consider_driver_experience',
+    'max_assignment_distance', 'preferred_driver_priority', 'auto_optimize_routes',
+    'route_optimization_algorithm', 'consider_traffic', 'consider_tolls', 'allow_route_deviations',
+    'max_route_deviation_miles', 'notify_on_dispatch', 'notify_on_check_call_missed',
+    'notify_on_driver_late', 'notify_on_route_deviation', 'notification_channels',
+    'track_driver_location', 'location_update_interval', 'geofence_enabled', 'geofence_radius',
+    'emergency_contact_required', 'auto_notify_on_emergency', 'emergency_escalation_minutes',
   ]
   
   for (const field of allowedFields) {
