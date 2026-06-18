@@ -2133,7 +2133,7 @@ function calculateDuration(start: string, end: string): number | null {
 async function syncLiveRouteDeviationFromLatestLocation(
   supabase: ReturnType<typeof createAdminClient>,
   device: EldDeviceSyncRow,
-  locations: Array<{ latitude: number | null; longitude: number | null }>
+  locations: Array<{ latitude: number | null | undefined; longitude: number | null | undefined }>
 ) {
   if (!device.truck_id || locations.length === 0) return
   const latest = locations[locations.length - 1]
