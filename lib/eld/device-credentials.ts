@@ -79,20 +79,20 @@ export async function getEldDeviceWithCredentials(
   return { data: decryptEldDeviceCredentialFields(toEldDeviceRow(data)), error: null }
 }
 
-type EldDevicesSelectQuery = ReturnType<ReturnType<SupabaseClient["from"]>["select"]>
-
 export async function listEldDevicesWithCredentials(params: {
   client: SupabaseClient
   companyId?: string
   select?: string
   status?: string
-  applyQuery?: (q: EldDevicesSelectQuery) => EldDevicesSelectQuery
+  truckId?: string
+  orderByCreatedAtDesc?: boolean
 }): Promise<{ data: EldDeviceRow[]; error: string | null }> {
   const select = params.select ?? "*"
   let query = params.client.from("eld_devices").select(select)
   if (params.companyId) query = query.eq("company_id", params.companyId)
   if (params.status) query = query.eq("status", params.status)
-  if (params.applyQuery) query = params.applyQuery(query) as typeof query
+  if (params.truckId) query = query.eq("truck_id", params.truckId)
+  if (params.orderByCreatedAtDesc) query = query.order("created_at", { ascending: false })
 
   const { data, error } = await query
   if (error) return { data: [], error: error.message }

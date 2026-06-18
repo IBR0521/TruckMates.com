@@ -93,11 +93,8 @@ export async function getELDDevices() {
           model
         )
       `,
-      applyQuery: (q) => {
-        let next = q.order("created_at", { ascending: false })
-        if (truckId) next = next.eq("truck_id", truckId)
-        return next
-      },
+      truckId: truckId ?? undefined,
+      orderByCreatedAtDesc: true,
     })
 
     if (listed.error) {
