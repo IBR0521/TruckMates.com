@@ -94,8 +94,8 @@ export async function getELDDevices() {
         )
       `,
       applyQuery: (q) => {
-        let next = q.order("created_at", { ascending: false }) as typeof q
-        if (truckId) next = next.eq("truck_id", truckId) as typeof q
+        let next = q.order("created_at", { ascending: false })
+        if (truckId) next = next.eq("truck_id", truckId)
         return next
       },
     })
