@@ -12,6 +12,10 @@ export const ELD_DEVICE_SYNC_SELECT =
 
 type EldDeviceRow = Record<string, unknown>
 
+function toEldDeviceRow(row: unknown): EldDeviceRow {
+  return row as EldDeviceRow
+}
+
 export function decryptEldDeviceCredentialFields(row: EldDeviceRow): EldDeviceRow {
   const out = { ...row }
   if ("api_key" in out && out.api_key != null && out.api_key !== "") {
@@ -72,7 +76,7 @@ export async function getEldDeviceWithCredentials(
   const { data, error } = await query.maybeSingle()
   if (error) return { data: null, error: error.message }
   if (!data) return { data: null, error: null }
-  return { data: decryptEldDeviceCredentialFields(data as EldDeviceRow), error: null }
+  return { data: decryptEldDeviceCredentialFields(toEldDeviceRow(data)), error: null }
 }
 
 type EldDevicesSelectQuery = ReturnType<ReturnType<SupabaseClient["from"]>["select"]>
@@ -92,7 +96,7 @@ export async function listEldDevicesWithCredentials(params: {
 
   const { data, error } = await query
   if (error) return { data: [], error: error.message }
-  const rows = (data ?? []).map((row) => decryptEldDeviceCredentialFields(row as EldDeviceRow))
+  const rows = (data ?? []).map((row) => decryptEldDeviceCredentialFields(toEldDeviceRow(row)))
   return { data: rows, error: null }
 }
 
@@ -110,7 +114,7 @@ export async function fetchActiveEldDevicesForSync(options?: {
   const { data, error } = await query
   if (error) return { data: [], error: error.message }
   return {
-    data: (data ?? []).map((row) => eldDeviceRowToSyncRow(row as EldDeviceRow)),
+    data: (data ?? []).map((row) => eldDeviceRowToSyncRow(toEldDeviceRow(row))),
     error: null,
   }
 }
@@ -124,7 +128,7 @@ export async function createEldDeviceWithCredentials(
 
   const { data, error } = await client.from("eld_devices").insert(payload).select().single()
   if (error) return { data: null, error: error.message }
-  return { data: decryptEldDeviceCredentialFields((data ?? {}) as EldDeviceRow), error: null }
+  return { data: decryptEldDeviceCredentialFields(toEldDeviceRow(data ?? {})), error: null }
 }
 
 export async function updateEldDeviceCredentials(
