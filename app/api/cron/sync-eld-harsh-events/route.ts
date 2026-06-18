@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { databaseErrorMessage } from "@/lib/error-message"
 import { hasFeatureAccess, normalizePlanTier, type PlanTier } from "@/lib/plan-limits"
 import type { EldDeviceSyncRow } from "@/lib/types/eld-sync"
+import { fetchActiveEldDevicesForSync } from "@/lib/eld/device-credentials"
 import { canonicalEldProvider, type EldProviderCanonical } from "@/lib/eld/provider-normalize"
 import { syncHarshEventsForDevice } from "@/lib/eld/harsh-events-sync"
 import { syncIdleSessionsForDevice } from "@/lib/eld/idle-sessions-sync"
@@ -19,21 +20,6 @@ type SyncCursorRow = {
   data_type: string
   last_synced_through: string
   consecutive_failures: number
-}
-
-function toEldDeviceSyncRow(row: Record<string, unknown>): EldDeviceSyncRow {
-  return {
-    id: String(row.id ?? ""),
-    company_id: String(row.company_id ?? ""),
-    truck_id: (row.truck_id as string | null | undefined) ?? null,
-    driver_id: (row.driver_id as string | null | undefined) ?? undefined,
-    api_key: (row.api_key as string | null | undefined) ?? undefined,
-    api_secret: (row.api_secret as string | null | undefined) ?? undefined,
-    api_endpoint: (row.api_endpoint as string | null | undefined) ?? undefined,
-    provider_device_id: String(row.provider_device_id ?? "").trim(),
-    provider: (row.provider as string | null | undefined) ?? null,
-    status: (row.status as string | null | undefined) ?? null,
-  }
 }
 
 async function loadCursor(
@@ -93,19 +79,16 @@ async function processCompanyHarshAndIdle(companyId: string, tier: PlanTier): Pr
     return { harsh: { devices: 0, inserted: 0, skipped: 0 }, idle: { devices: 0, inserted: 0, skipped: 0 } }
   }
 
-  const { data: deviceRows, error: devErr } = await admin
-    .from("eld_devices")
-    .select("id, company_id, truck_id, provider, status, provider_device_id, api_key, api_secret, api_endpoint")
-    .eq("company_id", companyId)
-    .eq("status", "active")
+  const { data: deviceRows, error: devErr } = await fetchActiveEldDevicesForSync({
+    companyId,
+    client: admin,
+  })
 
   if (devErr || !deviceRows?.length) {
     return { harsh: { devices: 0, inserted: 0, skipped: 0 }, idle: { devices: 0, inserted: 0, skipped: 0 } }
   }
 
-  const devices = deviceRows
-    .map((r) => toEldDeviceSyncRow(r as Record<string, unknown>))
-    .filter((d) => d.id && d.company_id && canonicalEldProvider(d.provider))
+  const devices = deviceRows.filter((d) => d.id && d.company_id && canonicalEldProvider(d.provider))
 
   const until = new Date()
   const defaultSince = new Date(until.getTime() - 24 * 60 * 60 * 1000)

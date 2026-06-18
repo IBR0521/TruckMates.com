@@ -86,6 +86,18 @@ export function validateEnv(): { valid: boolean; errors: string[]; warnings: str
     )
   }
 
+  if (process.env.NODE_ENV === 'production' && !String(process.env.ELD_TELEMETRY_WEBHOOK_SECRET || '').trim()) {
+    warnings.push(
+      'ELD_TELEMETRY_WEBHOOK_SECRET is not set — POST /api/webhooks/eld-telemetry-insert will return 401 until configured.',
+    )
+  }
+
+  if (process.env.NODE_ENV === 'production' && !String(process.env.ELD_CREDENTIALS_ENCRYPTION_KEY || '').trim()) {
+    warnings.push(
+      'ELD_CREDENTIALS_ENCRYPTION_KEY is not set — new ELD provider credentials will not be encrypted at rest.',
+    )
+  }
+
   // ELD webhook HMAC secrets (self-generated; register with provider). Optional — many carriers omit ELD.
   if (process.env.NODE_ENV === 'production') {
     const eldWebhookSecrets: Array<[string, string]> = [

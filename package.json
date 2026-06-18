@@ -28,6 +28,8 @@
     "operations:hardtest": "node scripts/operations-hard-test.mjs",
     "eld:generate-test-csv": "node scripts/generate-eld-test-csv.mjs",
     "eld:generate-fmcsa-output": "node scripts/generate-fmcsa-eld-output.mjs",
+    "verify:eld-telemetry-webhook": "node scripts/verify-eld-telemetry-webhook.mjs",
+    "backfill:eld-credentials": "tsx scripts/backfill-eld-credential-encryption.ts",
     "ai:eval": "tsx scripts/ai-eval/run.mjs"
   },
   "dependencies": {
@@ -104,6 +106,7 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.4",
     "resend": "^6.5.2",
+    "samlify": "^2.13.1",
     "shepherd.js": "^15.2.2",
     "sonner": "^1.7.4",
     "stripe": "^20.0.0",

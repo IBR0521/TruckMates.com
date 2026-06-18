@@ -20,6 +20,11 @@ import {
 } from "@/lib/eld/vehicle-discovery"
 import { autoMatchVehicles } from "@/lib/eld/vehicle-auto-match"
 import { geotabNotesWithDatabase } from "@/lib/eld/geotab-url"
+import {
+  createEldDeviceWithCredentials,
+  getEldDeviceWithCredentials,
+  updateEldDeviceCredentials,
+} from "@/lib/eld/device-credentials"
 import type { EldDeviceSyncRow } from "@/lib/types/eld-sync"
 
 export type EldWizardProvider = "samsara" | "motive" | "geotab"
@@ -135,10 +140,10 @@ export async function createELDDeviceFromWizard(params: {
     insert.notes = geotabNotesWithDatabase(params.credentials.database || "")
   }
 
-  const { data, error } = await supabase.from("eld_devices").insert(insert).select("id").single()
-  if (error) return { data: null, error: safeDbError(error) }
+  const created = await createEldDeviceWithCredentials(insert, { client: supabase })
+  if (created.error) return { data: null, error: safeDbError({ message: created.error } as { message: string }) }
 
-  const id = (data as { id: string }).id
+  const id = String((created.data as { id: string }).id)
   revalidatePath("/dashboard/eld/devices")
   return { data: { eld_device_id: id }, error: null }
 }
@@ -150,16 +155,18 @@ export async function discoverVehiclesForDeviceAction(params: {
   if ("error" in gate) return { data: null, error: gate.error }
 
   const supabase = await createClient()
-  const { data: device, error } = await supabase
-    .from("eld_devices")
-    .select(
+  const deviceResult = await getEldDeviceWithCredentials(params.eldDeviceId, {
+    companyId: gate.companyId,
+    client: supabase,
+    select:
       "id, company_id, provider, api_key, api_secret, api_endpoint, notes, provider_device_id, truck_id, status",
-    )
-    .eq("id", params.eldDeviceId)
-    .eq("company_id", gate.companyId)
-    .maybeSingle()
+  })
 
-  if (error || !device) return { data: null, error: error ? safeDbError(error) : "Device not found" }
+  if (deviceResult.error || !deviceResult.data) {
+    return { data: null, error: deviceResult.error || "Device not found" }
+  }
+
+  const device = deviceResult.data
 
   const discovered = await discoverVehiclesForDevice(device as EldDeviceSyncRow & { notes?: string })
   if (discovered.error || !discovered.data) {
@@ -205,16 +212,17 @@ export async function saveVehicleMappings(params: {
   if ("error" in gate) return { data: null, error: gate.error }
 
   const supabase = await createClient()
-  const { data: parent, error: pErr } = await supabase
-    .from("eld_devices")
-    .select("*")
-    .eq("id", params.eldDeviceId)
-    .eq("company_id", gate.companyId)
-    .maybeSingle()
+  const parentResult = await getEldDeviceWithCredentials(params.eldDeviceId, {
+    companyId: gate.companyId,
+    client: supabase,
+    select: "*",
+  })
 
-  if (pErr || !parent) return { data: null, error: pErr ? safeDbError(pErr) : "Device not found" }
+  if (parentResult.error || !parentResult.data) {
+    return { data: null, error: parentResult.error || "Device not found" }
+  }
 
-  const parentRow = parent as Record<string, unknown>
+  const parentRow = parentResult.data
   let saved = 0
   let mappedCount = 0
 
@@ -257,8 +265,6 @@ export async function saveVehicleMappings(params: {
         device_serial_number: childSerial,
         provider: parentRow.provider,
         provider_device_id: m.provider_vehicle_id,
-        api_key: parentRow.api_key,
-        api_secret: parentRow.api_secret,
         api_endpoint: parentRow.api_endpoint,
         notes: parentRow.notes,
         status: "active",
@@ -268,10 +274,25 @@ export async function saveVehicleMappings(params: {
 
       if (existing?.id) {
         await supabase.from("eld_devices").update(devicePayload).eq("id", existing.id)
+        await updateEldDeviceCredentials(
+          existing.id,
+          {
+            apiKey: (parentRow.api_key as string | null | undefined) ?? null,
+            apiSecret: (parentRow.api_secret as string | null | undefined) ?? null,
+          },
+          { companyId: gate.companyId, client: supabase },
+        )
       } else {
         const lim = await checkResourceLimit({ companyId: gate.companyId, resourceType: "eld_devices" })
         if (lim.allowed) {
-          await supabase.from("eld_devices").insert(devicePayload)
+          await createEldDeviceWithCredentials(
+            {
+              ...devicePayload,
+              api_key: parentRow.api_key,
+              api_secret: parentRow.api_secret,
+            },
+            { client: supabase },
+          )
         }
       }
     }
@@ -367,19 +388,18 @@ export async function runEldHealthCheck(deviceId: string): Promise<{
   if ("error" in gate) return { data: null, error: gate.error }
 
   const supabase = await createClient()
-  const { data: device, error } = await supabase
-    .from("eld_devices")
-    .select("id, provider, api_key, api_secret, api_endpoint, notes")
-    .eq("id", deviceId)
-    .eq("company_id", gate.companyId)
-    .maybeSingle()
+  const deviceResult = await getEldDeviceWithCredentials(deviceId, {
+    companyId: gate.companyId,
+    client: supabase,
+    select: "id, provider, api_key, api_secret, api_endpoint, notes",
+  })
 
-  if (error || !device) return { data: null, error: "Device not found" }
+  if (deviceResult.error || !deviceResult.data) return { data: null, error: "Device not found" }
 
-  const provider = normalizeProvider(String((device as { provider?: string }).provider || ""))
+  const provider = normalizeProvider(String((deviceResult.data as { provider?: string }).provider || ""))
   if (!provider) return { data: null, error: "Unknown provider" }
 
-  const d = device as {
+  const d = deviceResult.data as {
     api_key?: string | null
     api_secret?: string | null
     api_endpoint?: string | null

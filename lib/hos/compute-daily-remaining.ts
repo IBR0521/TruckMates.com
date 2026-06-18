@@ -81,26 +81,28 @@ function logDurationMinutes(
   return Math.max(0, duration)
 }
 
-/**
- * @param logsForDay — logs for the **target** calendar day only (or pre-filtered).
- * @param logsForWeekly — optional wider window (e.g. last 8 days) for 70h roll-up; if omitted, weekly fields are 0 / no violation.
- */
-export function computeDailyRemainingFromEldLogs(
+type HosDayAccum = {
+  drivingMinutes: number
+  onDutyMinutes: number
+  offDutyMinutes: number
+  sleeperMinutes: number
+  drivingMinutesSinceQualifyingBreak: number
+  latestDuty: string
+}
+
+function accumulateHosDayMinutes(
   logsForDay: readonly EldLogLike[],
-  nowMs: number = Date.now(),
-  logsForWeekly?: readonly EldLogLike[],
-): DailyRemainingHosResult {
+  nowMs: number,
+): HosDayAccum {
   let drivingMinutes = 0
   let onDutyMinutes = 0
   let offDutyMinutes = 0
   let sleeperMinutes = 0
+  let drivingMinutesSinceQualifyingBreak = 0
 
   const timeline = [...logsForDay].sort(
     (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
   )
-
-  /** FMCSA: 30+ min off-duty or sleeper resets the 8-hour driving clock. */
-  let drivingMinutesSinceQualifyingBreak = 0
 
   timeline.forEach((log, idx) => {
     const duration = logDurationMinutes(log, idx, timeline, nowMs)
@@ -130,9 +132,118 @@ export function computeDailyRemainingFromEldLogs(
     }
   })
 
+  const latestOpen = [...timeline].reverse().find((l) => !l.end_time)
+  const latestDuty = latestOpen?.log_type || timeline[timeline.length - 1]?.log_type || "off_duty"
+
+  return {
+    drivingMinutes,
+    onDutyMinutes,
+    offDutyMinutes,
+    sleeperMinutes,
+    drivingMinutesSinceQualifyingBreak,
+    latestDuty,
+  }
+}
+
+export type HosDeadlineReason =
+  | "11_hour_drive"
+  | "14_hour_window"
+  | "30_min_break"
+  | "60_70_hour"
+
+export type NextHosDeadlineResult =
+  | { kind: "clear" }
+  | { kind: "deadline"; deadlineAt: Date; reason: HosDeadlineReason }
+  | { kind: "violated_now"; reason: HosDeadlineReason }
+
+function primaryViolationReason(summary: DailyRemainingHosResult): HosDeadlineReason {
+  if (summary.needsBreak) return "30_min_break"
+  if (summary.weeklyCapViolation) return "60_70_hour"
+  if (summary.onDutyHours > MAX_ON_DUTY_HOURS) return "14_hour_window"
+  return "11_hour_drive"
+}
+
+/**
+ * Next moment this driver would violate HOS if current duty status continues.
+ * Uses the same rules as {@link computeDailyRemainingFromEldLogs}.
+ */
+export function computeNextHosDeadlineFromEldLogs(
+  logsForDay: readonly EldLogLike[],
+  nowMs: number = Date.now(),
+  logsForWeekly?: readonly EldLogLike[],
+): NextHosDeadlineResult {
+  const summary = computeDailyRemainingFromEldLogs(logsForDay, nowMs, logsForWeekly)
+  const day = accumulateHosDayMinutes(logsForDay, nowMs)
+
+  if (summary.violations.length > 0) {
+    return { kind: "violated_now", reason: primaryViolationReason(summary) }
+  }
+
+  const duty = day.latestDuty
+  if (duty === "off_duty" || duty === "sleeper_berth") {
+    return { kind: "clear" }
+  }
+
+  const candidates: Array<{ ms: number; reason: HosDeadlineReason }> = []
+
+  if (duty === "driving" || duty === "on_duty") {
+    if (summary.remainingDriving > 0) {
+      candidates.push({
+        ms: nowMs + summary.remainingDriving * 60 * 60 * 1000,
+        reason: "11_hour_drive",
+      })
+    }
+    if (summary.remainingOnDuty > 0) {
+      candidates.push({
+        ms: nowMs + summary.remainingOnDuty * 60 * 60 * 1000,
+        reason: "14_hour_window",
+      })
+    }
+  }
+
+  if (duty === "driving" && !summary.needsBreak) {
+    const minutesUntilBreak =
+      MAX_DRIVING_MINUTES_WITHOUT_BREAK - day.drivingMinutesSinceQualifyingBreak
+    if (minutesUntilBreak > 0) {
+      candidates.push({
+        ms: nowMs + minutesUntilBreak * 60 * 1000,
+        reason: "30_min_break",
+      })
+    }
+  }
+
+  if (logsForWeekly && logsForWeekly.length > 0 && summary.remainingWeeklyOnDuty > 0) {
+    candidates.push({
+      ms: nowMs + summary.remainingWeeklyOnDuty * 60 * 60 * 1000,
+      reason: "60_70_hour",
+    })
+  }
+
+  if (candidates.length === 0) {
+    return { kind: "clear" }
+  }
+
+  const earliest = candidates.reduce((a, b) => (a.ms <= b.ms ? a : b))
+  return { kind: "deadline", deadlineAt: new Date(earliest.ms), reason: earliest.reason }
+}
+
+/**
+ * @param logsForDay — logs for the **target** calendar day only (or pre-filtered).
+ * @param logsForWeekly — optional wider window (e.g. last 8 days) for 70h roll-up; if omitted, weekly fields are 0 / no violation.
+ */
+export function computeDailyRemainingFromEldLogs(
+  logsForDay: readonly EldLogLike[],
+  nowMs: number = Date.now(),
+  logsForWeekly?: readonly EldLogLike[],
+): DailyRemainingHosResult {
+  const day = accumulateHosDayMinutes(logsForDay, nowMs)
+  const drivingMinutes = day.drivingMinutes
+  const onDutyMinutes = day.onDutyMinutes
+  const drivingMinutesSinceQualifyingBreak = day.drivingMinutesSinceQualifyingBreak
+
   const drivingHours = drivingMinutes / 60
   const onDutyHours = onDutyMinutes / 60
-  const offDutyHours = (offDutyMinutes + sleeperMinutes) / 60
+  const offDutyHours = (day.offDutyMinutes + day.sleeperMinutes) / 60
 
   const remainingDriving = Math.max(0, MAX_DRIVING_HOURS - drivingHours)
   const remainingOnDuty = Math.max(0, MAX_ON_DUTY_HOURS - onDutyHours)

@@ -126,5 +126,13 @@ export async function changeDriverDutyStatus(logType: DriverDutyLogType): Promis
 
   revalidatePath("/dashboard/eld")
   revalidatePath("/dashboard")
+
+  try {
+    const { recomputeDriverHosDeadline } = await import("@/lib/deadlines/recompute-driver-hos-deadline")
+    await recomputeDriverHosDeadline(driverId)
+  } catch {
+    // non-blocking — deadline row will catch up on next duty change or sweep backfill
+  }
+
   return { error: null, data: { id: inserted?.id ? String(inserted.id) : undefined } }
 }

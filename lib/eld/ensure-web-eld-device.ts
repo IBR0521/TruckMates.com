@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { createEldDeviceWithCredentials } from "@/lib/eld/device-credentials"
 
 /**
  * Ensure an active `truckmates_mobile` ELD row exists for the truck (browser session ELD).
@@ -24,8 +25,6 @@ export async function ensureWebEldDeviceForTruck(
     installation_date: now.split("T")[0],
     notes: JSON.stringify({ source: "web_driver_eld_auto" }),
     last_sync_at: now,
-    api_key: null as string | null,
-    api_secret: null as string | null,
   }
 
   const { data: existingDevice } = await admin
@@ -50,7 +49,7 @@ export async function ensureWebEldDeviceForTruck(
     return { deviceId: data?.id ? String(data.id) : null, error: null }
   }
 
-  const { data, error } = await admin.from("eld_devices").insert(deviceData).select("id").single()
-  if (error) return { deviceId: null, error: error.message }
+  const { data, error } = await createEldDeviceWithCredentials(deviceData, { client: admin })
+  if (error) return { deviceId: null, error }
   return { deviceId: data?.id ? String(data.id) : null, error: null }
 }

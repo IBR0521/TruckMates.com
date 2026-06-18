@@ -1060,6 +1060,13 @@ export async function createLoad(formData: {
   void invalidateAiContextCache(ctx.companyId, "load")
   revalidatePath("/dashboard/loads")
   revalidatePath("/dashboard/routes")
+
+  try {
+    const { syncLoadDeadlinesForLoad } = await import("@/lib/deadlines/sync-load-deadlines")
+    await syncLoadDeadlinesForLoad(String(data.id))
+  } catch {
+    // non-blocking
+  }
   
   // Trigger webhook
   try {
@@ -1695,6 +1702,13 @@ export async function updateLoad(
   revalidatePath("/dashboard/loads")
   revalidatePath(`/dashboard/loads/${id}`)
   revalidatePath("/dashboard/accounting/invoices")
+
+  try {
+    const { syncLoadDeadlinesForLoad } = await import("@/lib/deadlines/sync-load-deadlines")
+    await syncLoadDeadlinesForLoad(id)
+  } catch {
+    // non-blocking
+  }
 
   // CRITICAL FIX: Ensure data is JSON-serializable for Next.js server actions
   const serializableData = resultData ? JSON.parse(JSON.stringify(resultData, (key, value) => {

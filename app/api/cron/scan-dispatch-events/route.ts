@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { scanAllDispatchEvents } from "@/app/actions/dispatch-event-notify"
 
+/** Missed check-calls, driver-late, and emergency escalations run via process-deadline-sweep. */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization")
   const vercelCronHeader = request.headers.get("x-vercel-cron")

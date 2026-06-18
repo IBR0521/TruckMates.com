@@ -87,6 +87,175 @@ async function notifyManagers(
   return 1
 }
 
+export async function notifyInstantEmergencyCheckCall(params: {
+  companyId: string
+  checkCallId: string
+  loadId?: string | null
+  notes?: string | null
+}): Promise<number> {
+  const admin = createAdminClient()
+  const settings = await getDispatchSettings(admin, params.companyId)
+  if (settings?.auto_notify_on_emergency === false) {
+    return 0
+  }
+
+  return notifyManagers(admin, params.companyId, "emergency_check_call", params.checkCallId, {
+    title: "Emergency check call",
+    message: params.notes || "An emergency check call was logged and needs immediate attention.",
+    priority: "critical",
+  })
+}
+
+type DeadlineProcessOutcome = "alert_fired" | "stale_no_alert"
+
+export async function processMissedCheckCallDeadline(checkCallId: string): Promise<{
+  outcome: DeadlineProcessOutcome
+  notified: number
+  marked: number
+}> {
+  const admin = createAdminClient()
+
+  const { data: row, error } = await admin
+    .from("check_calls")
+    .select("id, company_id, load_id, driver_id, call_type, scheduled_time, status")
+    .eq("id", checkCallId)
+    .maybeSingle()
+
+  if (error || !row) {
+    return { outcome: "stale_no_alert", notified: 0, marked: 0 }
+  }
+
+  const companyId = String(row.company_id || "")
+  if (!companyId || String(row.status || "") !== "pending") {
+    return { outcome: "stale_no_alert", notified: 0, marked: 0 }
+  }
+
+  const settings = await getDispatchSettings(admin, companyId)
+  if (!isDispatchNotifyEventEnabled(settings, "check_call_missed")) {
+    return { outcome: "stale_no_alert", notified: 0, marked: 0 }
+  }
+
+  const timeoutMinutes = Math.max(5, Number(settings?.check_call_timeout_minutes) || 30)
+  const cutoff = new Date(Date.now() - timeoutMinutes * 60 * 1000).toISOString()
+  if (String(row.scheduled_time || "") >= cutoff) {
+    return { outcome: "stale_no_alert", notified: 0, marked: 0 }
+  }
+
+  let marked = 0
+  if (settings?.auto_escalate_missed_calls !== false) {
+    await admin.from("check_calls").update({ status: "missed" }).eq("id", checkCallId)
+    marked = 1
+  }
+
+  const { data: load } = row.load_id
+    ? await admin.from("loads").select("shipment_number").eq("id", row.load_id).maybeSingle()
+    : { data: null }
+
+  const label = load?.shipment_number || row.load_id || checkCallId
+  const notified = await notifyManagers(admin, companyId, "check_call_missed", checkCallId, {
+    title: `Missed check call: ${label}`,
+    message: `Scheduled ${String(row.call_type || "check")} call was not completed on time.`,
+    shipmentNumber: label,
+    priority: "high",
+  })
+
+  return { outcome: notified > 0 ? "alert_fired" : "stale_no_alert", notified, marked }
+}
+
+export async function processDriverLateDeadline(loadId: string): Promise<{
+  outcome: DeadlineProcessOutcome
+  notified: number
+  stillLate: boolean
+}> {
+  const admin = createAdminClient()
+  const now = new Date().toISOString()
+
+  const { data: load, error } = await admin
+    .from("loads")
+    .select("id, company_id, shipment_number, origin, load_date, status")
+    .eq("id", loadId)
+    .maybeSingle()
+
+  if (error || !load) {
+    return { outcome: "stale_no_alert", notified: 0, stillLate: false }
+  }
+
+  const companyId = String(load.company_id || "")
+  const stillLate =
+    !!companyId &&
+    String(load.status || "") === "scheduled" &&
+    !!load.load_date &&
+    String(load.load_date) < now
+
+  if (!stillLate) {
+    return { outcome: "stale_no_alert", notified: 0, stillLate: false }
+  }
+
+  const settings = await getDispatchSettings(admin, companyId)
+  if (!isDispatchNotifyEventEnabled(settings, "driver_late")) {
+    return { outcome: "stale_no_alert", notified: 0, stillLate: true }
+  }
+
+  const label = load.shipment_number || loadId
+  const notified = await notifyManagers(admin, companyId, "driver_late", loadId, {
+    title: `Driver late: ${label}`,
+    message: `Load ${label} is still scheduled past pickup time (${load.origin || "pickup"}).`,
+    shipmentNumber: label,
+    priority: "high",
+  })
+
+  return {
+    outcome: notified > 0 ? "alert_fired" : "stale_no_alert",
+    notified,
+    stillLate: true,
+  }
+}
+
+export async function processEmergencyEscalationDeadline(checkCallId: string): Promise<{
+  outcome: DeadlineProcessOutcome
+  notified: number
+}> {
+  const admin = createAdminClient()
+
+  const { data: row, error } = await admin
+    .from("check_calls")
+    .select("id, company_id, load_id, notes, scheduled_time, created_at, call_type, status")
+    .eq("id", checkCallId)
+    .maybeSingle()
+
+  if (error || !row) {
+    return { outcome: "stale_no_alert", notified: 0 }
+  }
+
+  const companyId = String(row.company_id || "")
+  if (
+    !companyId ||
+    String(row.call_type || "").toLowerCase() !== "emergency" ||
+    String(row.status || "") !== "pending"
+  ) {
+    return { outcome: "stale_no_alert", notified: 0 }
+  }
+
+  const settings = await getDispatchSettings(admin, companyId)
+  if (settings?.auto_notify_on_emergency === false) {
+    return { outcome: "stale_no_alert", notified: 0 }
+  }
+
+  const escalationMinutes = Math.max(5, Number(settings?.emergency_escalation_minutes) || 15)
+  const cutoff = new Date(Date.now() - escalationMinutes * 60 * 1000).toISOString()
+  if (String(row.created_at || "") >= cutoff) {
+    return { outcome: "stale_no_alert", notified: 0 }
+  }
+
+  const notified = await notifyManagers(admin, companyId, "emergency_escalation", checkCallId, {
+    title: "Emergency check call escalation",
+    message: row.notes || "Emergency check call is still unresolved.",
+    priority: "critical",
+  })
+
+  return { outcome: notified > 0 ? "alert_fired" : "stale_no_alert", notified }
+}
+
 export async function scanMissedCheckCallsForCompany(companyId: string): Promise<{
   data: { notified: number; marked: number } | null
   error: string | null
@@ -264,10 +433,7 @@ export async function scanEmergencyEscalationsForCompany(companyId: string): Pro
 export async function scanAllDispatchEvents(): Promise<{
   data: {
     companies: number
-    missed_check_calls: number
-    driver_late: number
     route_deviation: number
-    emergency_escalations: number
   } | null
   error: string | null
 }> {
@@ -282,32 +448,18 @@ export async function scanAllDispatchEvents(): Promise<{
     .filter(Boolean)
 
   const results = await batchOperations(companyIds, 6, async (companyId) => {
-    const [missed, late, deviation, emergency] = await Promise.all([
-      scanMissedCheckCallsForCompany(companyId),
-      scanDriverLateForCompany(companyId),
-      scanRouteDeviationsForCompany(companyId),
-      scanEmergencyEscalationsForCompany(companyId),
-    ])
+    const deviation = await scanRouteDeviationsForCompany(companyId)
     return {
-      missed: missed.data?.notified ?? 0,
-      late: late.data?.notified ?? 0,
       deviation: deviation.data?.notified ?? 0,
-      emergency: emergency.data?.notified ?? 0,
     }
   })
 
-  const missedCheckCalls = results.reduce((sum, r) => sum + r.missed, 0)
-  const driverLate = results.reduce((sum, r) => sum + r.late, 0)
   const routeDeviation = results.reduce((sum, r) => sum + r.deviation, 0)
-  const emergencyEscalations = results.reduce((sum, r) => sum + r.emergency, 0)
 
   return {
     data: {
       companies: companyIds.length,
-      missed_check_calls: missedCheckCalls,
-      driver_late: driverLate,
       route_deviation: routeDeviation,
-      emergency_escalations: emergencyEscalations,
     },
     error: null,
   }

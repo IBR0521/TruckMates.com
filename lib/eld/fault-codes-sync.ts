@@ -21,6 +21,7 @@ import {
 import { handleNewFaultCode, type FaultCodeRow } from "@/lib/eld/fault-code-actions"
 import { hasFeatureAccess } from "@/lib/plan-limits"
 import { getCompanyTier } from "@/lib/plan-enforcement"
+import { fetchActiveEldDevicesForSync } from "@/lib/eld/device-credentials"
 
 export type FaultCodeNormalized = {
   truck_external_id: string
@@ -507,23 +508,19 @@ export async function syncFaultCodesForCompany(companyId: string): Promise<{
   }
   const applyTranslations = hasFeatureAccess(tier, "eld_fault_codes_advanced")
 
-  const { data: devices, error: dErr } = await admin
-    .from("eld_devices")
-    .select(
-      "id, company_id, truck_id, driver_id, api_key, api_secret, api_endpoint, provider_device_id, provider, status",
-    )
-    .eq("company_id", companyId)
-    .eq("status", "active")
+  const { data: devices, error: dErr } = await fetchActiveEldDevicesForSync({
+    companyId,
+    client: admin,
+  })
 
-  if (dErr) return { ok: false, error: safeDbError(dErr), devices: 0, inserted: 0, updated: 0, cleared: 0 }
+  if (dErr) return { ok: false, error: safeDbError({ message: dErr } as { message: string }), devices: 0, inserted: 0, updated: 0, cleared: 0 }
 
   let inserted = 0
   let updated = 0
   let cleared = 0
   const allNewIds: string[] = []
 
-  for (const raw of devices ?? []) {
-    const device = raw as EldDeviceSyncRow
+  for (const device of devices ?? []) {
     const provider = canonicalEldProvider(device.provider)
     if (!provider) continue
 

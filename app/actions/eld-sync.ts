@@ -3,7 +3,8 @@
 import * as Sentry from "@sentry/nextjs"
 import { errorMessage } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getELDDevices, getELDDevice } from "./eld"
+import { getELDDevices } from "./eld"
+import { fetchActiveEldDevicesForSync, getEldDeviceWithCredentials, eldDeviceRowToSyncRow } from "@/lib/eld/device-credentials"
 import { recordBillableApiUsage } from "./api-usage"
 import type { EldDeviceSyncRow, EldDriverMappingRow, ProviderApiJson } from "@/lib/types/eld-sync"
 import { runFaultCodePipelineAfterEldSync } from "@/lib/eld/fault-codes-sync"
@@ -2100,24 +2101,7 @@ function calculateDuration(start: string, end: string): number | null {
   }
 }
 
-/** Map `eld_devices` row (admin fetch) into the shape used by provider sync functions. */
-function eldDeviceRowToSyncRow(row: Record<string, unknown>): EldDeviceSyncRow {
-  return {
-    id: String(row.id ?? ""),
-    company_id: String(row.company_id ?? ""),
-    truck_id: (row.truck_id as string | null | undefined) ?? null,
-    driver_id: (row.driver_id as string | null | undefined) ?? undefined,
-    api_key: (row.api_key as string | null | undefined) ?? undefined,
-    api_secret: (row.api_secret as string | null | undefined) ?? undefined,
-    api_endpoint: (row.api_endpoint as string | null | undefined) ?? undefined,
-    provider_device_id: String(row.provider_device_id ?? "").trim(),
-    provider: (row.provider as string | null | undefined) ?? null,
-    status: (row.status as string | null | undefined) ?? null,
-    device_name: (row.device_name as string | null | undefined) ?? null,
-    last_sync_at: (row.last_sync_at as string | null | undefined) ?? null,
-    lastSyncAt: (row.lastSyncAt as string | null | undefined) ?? undefined,
-  }
-}
+/** Map `eld_devices` row (admin fetch) into the shape used by provider sync functions — see lib/eld/device-credentials.ts */
 
 /**
  * Sync one device using service role (no user session). Used by Vercel/pg cron only.
@@ -2159,18 +2143,13 @@ export async function syncAllELDDevicesForCron(): Promise<{
 }> {
   const admin = createAdminClient()
 
-  const { data: rows, error } = await admin
-    .from("eld_devices")
-    .select(
-      "id, company_id, truck_id, device_name, provider, status, last_sync_at, provider_device_id, api_key, api_secret, api_endpoint",
-    )
-    .eq("status", "active")
+  const { data: devices, error } = await fetchActiveEldDevicesForSync({ client: admin })
 
   if (error) {
-    return { data: null, error: error.message }
+    return { data: null, error }
   }
 
-  if (!rows || rows.length === 0) {
+  if (!devices || devices.length === 0) {
     return { data: { synced: 0, failed: 0, companies: 0 }, error: null }
   }
 
@@ -2178,12 +2157,10 @@ export async function syncAllELDDevicesForCron(): Promise<{
   let synced = 0
   let failed = 0
 
-  for (const raw of rows) {
-    const row = raw as Record<string, unknown>
-    const cid = String(row.company_id || "")
+  for (const device of devices) {
+    const cid = String(device.company_id || "")
     if (cid) companyIds.add(cid)
 
-    const device = eldDeviceRowToSyncRow(row)
     try {
       const result = await syncELDDeviceAdmin(device)
       if (result.error) {
@@ -2223,13 +2200,13 @@ export type ELDDeviceSyncActionResult = {
 
 // Main sync function - syncs a single device
 export async function syncELDDevice(deviceId: string): Promise<ELDDeviceSyncActionResult> {
-  const deviceResult = await getELDDevice(deviceId)
+  const deviceResult = await getEldDeviceWithCredentials(deviceId)
   
   if (deviceResult.error || !deviceResult.data) {
     return { error: deviceResult.error || "Device not found", data: null }
   }
 
-  const device = deviceResult.data as EldDeviceSyncRow
+  const device = eldDeviceRowToSyncRow(deviceResult.data)
   const result = (await syncELDDeviceAdmin(device)) as ELDDeviceSyncActionResult
   if (!result.error && device.company_id) {
     await runFaultCodePipelineAfterEldSync(device.company_id)
@@ -2245,7 +2222,9 @@ export async function syncAllELDDevices() {
     return { error: devicesResult.error || "Failed to get devices", data: null }
   }
 
-  const activeDevices = devicesResult.data.filter((d: EldDeviceSyncRow) => d.status === "active")
+  const activeDevices = devicesResult.data
+    .filter((d) => d.status === "active")
+    .map((d) => eldDeviceRowToSyncRow(d as Record<string, unknown>))
   const results = []
 
   const companiesToProcess = new Set<string>()

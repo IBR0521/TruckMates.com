@@ -664,6 +664,7 @@ export default function Sidebar({ isOpen, onToggle, isCollapsed, onCollapseToggl
               <NavItem href="/dashboard/settings/webhooks" label="Webhooks" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/multi-terminal" label="Multi-terminal" planBadge="Fleet" isSubitem isCollapsed={shouldShowCollapsed} />
               <NavItem href="/dashboard/settings/api-keys" label="API Keys" planBadge="Fleet" isSubitem isCollapsed={shouldShowCollapsed} />
+              <NavItem href="/dashboard/settings/sso" label="SSO (SAML)" planBadge="Enterprise" isSubitem isCollapsed={shouldShowCollapsed} />
             </DropdownItem>
           )}
         </div>

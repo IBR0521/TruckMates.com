@@ -157,6 +157,10 @@ function formatLocation(
   return null
 }
 
+/**
+ * Superseded by `/api/cron/process-deadline-sweep` (deadline-tracking Phase 1).
+ * Kept for reference — logic reused via `lib/hos/hos-violation-alert.ts`.
+ */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization")
   const cronSecret = process.env.CRON_SECRET

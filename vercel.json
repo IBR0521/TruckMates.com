@@ -5,16 +5,8 @@
       "schedule": "*/30 * * * *"
     },
     {
-      "path": "/api/cron/scan-hos-violations",
-      "schedule": "*/15 * * * *"
-    },
-    {
-      "path": "/api/cron/scan-detention",
-      "schedule": "7,22,37,52 * * * *"
-    },
-    {
-      "path": "/api/cron/scan-delivery-delays",
-      "schedule": "12,42 * * * *"
+      "path": "/api/cron/process-deadline-sweep",
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/scan-dispatch-events",
@@ -51,6 +43,10 @@
     {
       "path": "/api/cron/cleanup-notifications",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-sso",
+      "schedule": "25 4 * * *"
     },
     {
       "path": "/api/cron/auto-maintenance",
@@ -98,7 +94,7 @@
     },
     {
       "path": "/api/cron/process-geofences",
-      "schedule": "*/5 * * * *"
+      "schedule": "*/2 * * * *"
     },
     {
       "path": "/api/cron/sync-eld-fault-codes",
@@ -140,6 +136,10 @@
     },
     "app/api/cron/process-geofences/route.ts": {
       "maxDuration": 300,
+      "memory": 1024
+    },
+    "app/api/webhooks/eld-telemetry-insert/route.ts": {
+      "maxDuration": 120,
       "memory": 1024
     },
     "app/api/cron/sync-eld-fault-codes/route.ts": {

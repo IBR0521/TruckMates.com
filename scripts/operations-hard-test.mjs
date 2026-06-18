@@ -450,7 +450,71 @@ if (read("lib/eld/geofence-detector.ts").includes("geofence_radius")) {
   fail("geofence_radius not applied in geofence detector")
 }
 
-if (read("app/api/eld/mobile/locations/route.ts").includes("track_driver_location") && read("app/api/eld/mobile/locations/route.ts").includes("location_update_interval")) {
+const migration249 = exists("supabase/migrations/249_20260617140000_eld_telemetry_geofence_webhook.sql")
+  ? read("supabase/migrations/249_20260617140000_eld_telemetry_geofence_webhook.sql")
+  : ""
+if (migration249.includes("pg_net") && migration249.includes("eld_telemetry_points_geofence_webhook")) {
+  pass("migration 249: pg_net trigger on eld_telemetry_points INSERT")
+} else {
+  fail("migration 249 missing or incomplete")
+}
+
+if (exists("app/api/webhooks/eld-telemetry-insert/route.ts")) {
+  const webhookRoute = read("app/api/webhooks/eld-telemetry-insert/route.ts")
+  if (
+    webhookRoute.includes("ELD_TELEMETRY_WEBHOOK_SECRET") &&
+    webhookRoute.includes("geofenceProcessingLockKey") &&
+    webhookRoute.includes("processGeofenceTelemetryForCompany")
+  ) {
+    pass("eld-telemetry-insert webhook route wired with lock + geofence processor")
+  } else {
+    fail("eld-telemetry-insert webhook route incomplete")
+  }
+} else {
+  fail("app/api/webhooks/eld-telemetry-insert/route.ts missing")
+}
+
+if (read("lib/cron/job-lock.ts").includes("geofenceProcessingLockKey")) {
+  pass("job-lock supports per-company geofence processing keys")
+} else {
+  fail("geofenceProcessingLockKey missing from job-lock")
+}
+
+const geofenceCron = vercelJson.match(/process-geofences[\s\S]*?"schedule":\s*"([^"]+)"/)
+if (geofenceCron && geofenceCron[1] === "*/2 * * * *") {
+  pass("vercel.json demoted process-geofences cron to */2 (safety net)")
+} else {
+  fail("vercel.json process-geofences schedule should be */2 * * * *")
+}
+
+if (read("app/api/cron/process-geofences/route.ts").includes("sweep caught telemetry the webhook path missed")) {
+  pass("process-geofences cron logs when safety net processes points")
+} else {
+  fail("process-geofences missing webhook-miss audit log")
+}
+
+if (read("app/api/cron/process-geofences/route.ts").includes("geofenceProcessingLockKey")) {
+  pass("process-geofences cron uses same per-company lock as webhook")
+} else {
+  fail("process-geofences cron missing per-company lock")
+}
+
+if (read("app/api/cron/process-geofences/route.ts").includes("ELD_TELEMETRY_WEBHOOK_SECRET")) {
+  fail("process-geofences should not depend on ELD_TELEMETRY_WEBHOOK_SECRET")
+} else {
+  pass("process-geofences cron independent of webhook secret")
+}
+
+if (exists("scripts/verify-eld-telemetry-webhook.mjs")) {
+  pass("verify-eld-telemetry-webhook script present")
+} else {
+  fail("scripts/verify-eld-telemetry-webhook.mjs missing")
+}
+
+if (
+  read("app/api/eld/mobile/locations/route.ts").includes("track_driver_location") &&
+  read("app/api/eld/mobile/locations/route.ts").includes("location_update_interval")
+) {
   pass("mobile location API respects tracking settings")
 } else {
   fail("mobile location API missing tracking interval enforcement")

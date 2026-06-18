@@ -2,6 +2,10 @@ import { NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { scanAllDeliveryDelays } from "@/app/actions/delivery-delay-notify"
 
+/**
+ * Superseded by `/api/cron/process-deadline-sweep` (deadline-tracking Phase 1).
+ * Kept for reference — delay rules live in `lib/delivery-delay-scan.ts`.
+ */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization")
   const vercelCronHeader = request.headers.get("x-vercel-cron")

@@ -4,9 +4,13 @@ import { createAdminClient } from "@/lib/supabase/admin"
 import { errorMessage } from "@/lib/error-message"
 import { hasFeatureAccess, normalizePlanTier, type PlanTier } from "@/lib/plan-limits"
 import { mapWithConcurrency } from "@/lib/utils/map-with-concurrency"
+import { acquireJobLock, geofenceProcessingLockKey, releaseJobLock } from "@/lib/cron/job-lock"
+import { logger } from "@/lib/logger"
 import { processGeofenceTelemetryForCompany } from "@/lib/eld/geofence-detector"
 
 export const maxDuration = 300
+
+const GEOFENCE_LOCK_SECONDS = 120
 
 async function companyTier(admin: ReturnType<typeof createAdminClient>, companyId: string): Promise<PlanTier> {
   const { data } = await admin.from("companies").select("subscription_tier").eq("id", companyId).maybeSingle()
@@ -51,8 +55,24 @@ export async function GET(request: Request) {
     }
 
     const results = await mapWithConcurrency(eligible, 5, async (companyId) => {
-      const r = await processGeofenceTelemetryForCompany(companyId)
-      return { companyId, ...r }
+      const lockKey = geofenceProcessingLockKey(companyId)
+      const locked = await acquireJobLock(lockKey, GEOFENCE_LOCK_SECONDS)
+      if (!locked) {
+        return { companyId, processedPoints: 0, error: null, skipped: true as const }
+      }
+
+      try {
+        const r = await processGeofenceTelemetryForCompany(companyId)
+        if (r.processedPoints > 0) {
+          logger.warn("[geofence-sweep] sweep caught telemetry the webhook path missed", {
+            company_id: companyId,
+            processed_points: r.processedPoints,
+          })
+        }
+        return { companyId, ...r }
+      } finally {
+        await releaseJobLock(lockKey)
+      }
     })
 
     return NextResponse.json({

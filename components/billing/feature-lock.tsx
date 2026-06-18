@@ -37,6 +37,9 @@ function upgradeFeatureForPlanFeature(feature: keyof PlanFeatures): UpgradeFeatu
   ) {
     return "api_keys"
   }
+  if (feature === "sso") {
+    return "api_keys"
+  }
   if (feature === "ap_vendor_invoicing" || feature === "bank_reconciliation" || feature === "gl_quickbooks_sync") {
     return "quickbooks"
   }

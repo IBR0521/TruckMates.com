@@ -83,9 +83,6 @@ export async function POST(request: NextRequest) {
       installation_date: new Date().toISOString().split("T")[0],
       notes: device_info ? JSON.stringify(device_info) : null,
       last_sync_at: new Date().toISOString(),
-      // API credentials not needed for mobile app (uses auth token)
-      api_key: null,
-      api_secret: null,
     }
 
     // Check if device with this serial already exists and belongs to a different company

@@ -721,6 +721,23 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
             Sentry.captureException(error)
           }
         }
+
+        if (visit && ctx.companyId) {
+          try {
+            const { fetchActiveLoadForTruck, syncLoadDeadlinesOnArrival } = await import(
+              "@/lib/deadlines/sync-load-deadlines"
+            )
+            const activeLoad = await fetchActiveLoadForTruck(ctx.companyId, truckId)
+            if (activeLoad) {
+              await syncLoadDeadlinesOnArrival({
+                loadId: activeLoad.id,
+                arrivalAt: new Date(timestamp || Date.now()),
+              })
+            }
+          } catch (error) {
+            Sentry.captureException(error)
+          }
+        }
       } else if (!isInside && wasInside) {
         // Exit event
         const duration = recentVisit?.entry_timestamp
@@ -816,6 +833,20 @@ export async function checkGeofenceEntry(truckId: string, latitude: number, long
           try {
             const { finalizeDetention } = await import("./detention-tracking")
             await finalizeDetention(visit.id)
+          } catch (error) {
+            Sentry.captureException(error)
+          }
+        }
+
+        if (visit && ctx.companyId) {
+          try {
+            const { fetchActiveLoadForTruck, syncLoadDeadlinesForLoad } = await import(
+              "@/lib/deadlines/sync-load-deadlines"
+            )
+            const activeLoad = await fetchActiveLoadForTruck(ctx.companyId, truckId)
+            if (activeLoad) {
+              await syncLoadDeadlinesForLoad(activeLoad.id)
+            }
           } catch (error) {
             Sentry.captureException(error)
           }

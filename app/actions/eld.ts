@@ -10,6 +10,12 @@ import { ensureDriverIdForUser } from "@/lib/eld/ensure-driver"
 import { resolveTruckIdForDriver } from "@/lib/eld/resolve-driver-truck"
 import { mapLegacyRole } from "@/lib/roles"
 import { revalidatePath } from "next/cache"
+import {
+  createEldDeviceWithCredentials,
+  getEldDeviceWithCredentials,
+  listEldDevicesWithCredentials,
+  updateEldDeviceCredentials,
+} from "@/lib/eld/device-credentials"
 /** Drivers: same provisioning as dashboard/mobile (`ensureDriverIdForUser`). Others: DB lookup only. */
 async function resolveDriverIdForELD(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -66,9 +72,19 @@ export async function getELDDevices() {
       return { error: ctx.error || "Not authenticated", data: null }
     }
 
-    let query = supabase
-      .from("eld_devices")
-      .select(`
+    const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
+    let truckId: string | null = null
+    if (role === "driver" && ctx.userId) {
+      truckId = await getDriverTruckIdForUser(supabase, ctx.companyId, ctx.userId, role)
+      if (!truckId) {
+        return { data: [], error: null }
+      }
+    }
+
+    const listed = await listEldDevicesWithCredentials({
+      client: supabase,
+      companyId: ctx.companyId,
+      select: `
         *,
         trucks:truck_id (
           id,
@@ -76,26 +92,19 @@ export async function getELDDevices() {
           make,
           model
         )
-      `)
-      .eq("company_id", ctx.companyId)
-      .order("created_at", { ascending: false })
+      `,
+      applyQuery: (q) => {
+        let next = q.order("created_at", { ascending: false }) as typeof q
+        if (truckId) next = next.eq("truck_id", truckId) as typeof q
+        return next
+      },
+    })
 
-    const role = ctx.user ? mapLegacyRole(ctx.user.role) : null
-    if (role === "driver" && ctx.userId) {
-      const truckId = await getDriverTruckIdForUser(supabase, ctx.companyId, ctx.userId, role)
-      if (!truckId) {
-        return { data: [], error: null }
-      }
-      query = query.eq("truck_id", truckId)
+    if (listed.error) {
+      return { error: safeDbError({ message: listed.error } as { message: string }), data: null }
     }
 
-    const { data: devices, error } = await query
-
-    if (error) {
-      return { error: safeDbError(error), data: null }
-    }
-
-    return { data: devices, error: null }
+    return { data: listed.data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
     const message = error instanceof Error ? errorMessage(error) : "An unexpected error occurred"
@@ -114,9 +123,10 @@ export async function getELDDevice(id: string) {
       return { error: ctx.error || "Not authenticated", data: null }
     }
 
-    const { data: device, error } = await supabase
-      .from("eld_devices")
-      .select(`
+    const deviceResult = await getEldDeviceWithCredentials(id, {
+      companyId: ctx.companyId,
+      client: supabase,
+      select: `
         *,
         trucks:truck_id (
           id,
@@ -124,14 +134,14 @@ export async function getELDDevice(id: string) {
           make,
           model
         )
-      `)
-      .eq("id", id)
-      .eq("company_id", ctx.companyId)
-      .maybeSingle()
+      `,
+    })
 
-    if (error) {
-      return { error: safeDbError(error), data: null }
+    if (deviceResult.error) {
+      return { error: safeDbError({ message: deviceResult.error } as { message: string }), data: null }
     }
+
+    const device = deviceResult.data
 
     if (!device) {
       return { error: "ELD device not found", data: null }
@@ -204,26 +214,21 @@ export async function createELDDevice(formData: {
     }
 
     if (formData.provider_device_id) deviceData.provider_device_id = formData.provider_device_id.trim()
-    if (formData.api_key) deviceData.api_key = formData.api_key
-    if (formData.api_secret) deviceData.api_secret = formData.api_secret
     if (formData.api_endpoint) deviceData.api_endpoint = formData.api_endpoint
     if (formData.truck_id) deviceData.truck_id = formData.truck_id
     if (formData.firmware_version) deviceData.firmware_version = formData.firmware_version
     if (formData.installation_date) deviceData.installation_date = formData.installation_date
     if (formData.notes) deviceData.notes = formData.notes
+    if (formData.api_key) deviceData.api_key = formData.api_key
+    if (formData.api_secret) deviceData.api_secret = formData.api_secret
 
-    const { data, error } = await supabase
-      .from("eld_devices")
-      .insert(deviceData)
-      .select()
-      .single()
-
-    if (error) {
-      return { error: safeDbError(error), data: null }
+    const created = await createEldDeviceWithCredentials(deviceData, { client: supabase })
+    if (created.error) {
+      return { error: safeDbError({ message: created.error } as { message: string }), data: null }
     }
 
     revalidatePath("/dashboard/eld")
-    return { data, error: null }
+    return { data: created.data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
     const message = error instanceof Error ? errorMessage(error) : "Failed to create ELD device"
@@ -269,8 +274,6 @@ export async function updateELDDevice(
     if (formData.device_serial_number !== undefined) updateData.device_serial_number = formData.device_serial_number
     if (formData.provider !== undefined) updateData.provider = formData.provider
     if (formData.provider_device_id !== undefined) updateData.provider_device_id = formData.provider_device_id
-    if (formData.api_key !== undefined) updateData.api_key = formData.api_key
-    if (formData.api_secret !== undefined) updateData.api_secret = formData.api_secret
     if (formData.api_endpoint !== undefined) updateData.api_endpoint = formData.api_endpoint
     if (formData.truck_id !== undefined) updateData.truck_id = formData.truck_id || null
     if (formData.status !== undefined) updateData.status = formData.status
@@ -278,24 +281,46 @@ export async function updateELDDevice(
     if (formData.installation_date !== undefined) updateData.installation_date = formData.installation_date || null
     if (formData.notes !== undefined) updateData.notes = formData.notes
 
-    if (Object.keys(updateData).length === 0) {
+    const hasCredentialUpdate =
+      formData.api_key !== undefined || formData.api_secret !== undefined
+
+    if (Object.keys(updateData).length === 0 && !hasCredentialUpdate) {
       return { error: "No changes provided", data: null }
     }
 
-    const { data, error } = await supabase
-      .from("eld_devices")
-      .update(updateData)
-      .eq("id", id)
-      .eq("company_id", ctx.companyId)
-      .select()
-      .single()
+    if (Object.keys(updateData).length > 0) {
+      const { error } = await supabase
+        .from("eld_devices")
+        .update(updateData)
+        .eq("id", id)
+        .eq("company_id", ctx.companyId)
 
-    if (error) {
-      return { error: safeDbError(error), data: null }
+      if (error) {
+        return { error: safeDbError(error), data: null }
+      }
+    }
+
+    if (hasCredentialUpdate) {
+      const credErr = await updateEldDeviceCredentials(
+        id,
+        {
+          apiKey: formData.api_key,
+          apiSecret: formData.api_secret,
+        },
+        { companyId: ctx.companyId, client: supabase },
+      )
+      if (credErr.error) {
+        return { error: safeDbError({ message: credErr.error } as { message: string }), data: null }
+      }
+    }
+
+    const refreshed = await getEldDeviceWithCredentials(id, { companyId: ctx.companyId, client: supabase })
+    if (refreshed.error) {
+      return { error: safeDbError({ message: refreshed.error } as { message: string }), data: null }
     }
 
     revalidatePath("/dashboard/eld")
-    return { data, error: null }
+    return { data: refreshed.data, error: null }
   } catch (error: unknown) {
     Sentry.captureException(error)
     const message = error instanceof Error ? errorMessage(error) : "Failed to update ELD device"

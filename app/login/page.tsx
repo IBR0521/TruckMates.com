@@ -1,15 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { errorMessage } from "@/lib/error-message"
 import { Input } from "@/components/ui/input"
-import { Check, Loader2 } from "lucide-react"
+import { Check, Loader2, Shield } from "lucide-react"
 import Link from "next/link"
 import { toast } from "sonner"
 import { Logo } from "@/components/logo"
 import { useRouter } from "next/navigation"
 import { signInWithCredentials } from "@/app/actions/auth"
 import { DotBg } from "@/components/marketing/marketing-ui"
+import { useDebounce } from "@/lib/hooks/use-debounce"
 
 const BULLETS = [
   "Dispatch, compliance, and invoicing in one place",
@@ -21,7 +22,32 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [ssoAvailable, setSsoAvailable] = useState<boolean | null>(null)
+  const [ssoChecking, setSsoChecking] = useState(false)
+  const debouncedEmail = useDebounce(email, 400)
   const router = useRouter()
+
+  const checkSso = useCallback(async (value: string) => {
+    const trimmed = value.trim()
+    if (!trimmed.includes("@")) {
+      setSsoAvailable(null)
+      return
+    }
+    setSsoChecking(true)
+    try {
+      const res = await fetch(`/api/sso/check?email=${encodeURIComponent(trimmed)}`)
+      const data = (await res.json()) as { available?: boolean }
+      setSsoAvailable(Boolean(data.available))
+    } catch {
+      setSsoAvailable(null)
+    } finally {
+      setSsoChecking(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void checkSso(debouncedEmail)
+  }, [debouncedEmail, checkSso])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,6 +77,17 @@ export default function LoginPage() {
       setIsLoading(false)
     }
   }
+
+  const handleSsoLogin = () => {
+    const trimmed = email.trim()
+    if (!trimmed) {
+      toast.error("Enter your work email to continue with SSO")
+      return
+    }
+    window.location.href = `/api/sso/login?email=${encodeURIComponent(trimmed)}`
+  }
+
+  const showPasswordForm = ssoAvailable !== true
 
   return (
     <div className="flex min-h-screen">
@@ -120,10 +157,10 @@ export default function LoginPage() {
             className="mt-2 mb-8 text-sm text-[var(--w-text-2)]"
             style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
           >
-            Enter your credentials to continue.
+            {ssoAvailable ? "Use your company sign-in to continue." : "Enter your credentials to continue."}
           </p>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <div className="space-y-5">
             <div>
               <label
                 className="mb-2 block text-[11px] uppercase tracking-wider text-[var(--w-text-3)]"
@@ -143,50 +180,84 @@ export default function LoginPage() {
                   fontFamily: "var(--font-jakarta), sans-serif",
                 }}
                 required
-              />
-            </div>
-            <div>
-              <label
-                className="mb-2 block text-[11px] uppercase tracking-wider text-[var(--w-text-3)]"
-                style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
-              >
-                Password
-              </label>
-              <Input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="h-11 w-full rounded-[10px] border text-[15px] text-[var(--w-text)] focus-visible:ring-[var(--w-blue)] focus-visible:ring-offset-0"
-                style={{
-                  background: "var(--w-bg)",
-                  borderColor: "var(--w-border-md)",
-                  fontFamily: "var(--font-jakarta), sans-serif",
-                }}
-                required
+                autoComplete="email"
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-[10px] text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-              style={{
-                background: "var(--w-blue)",
-                fontFamily: "var(--font-jakarta), sans-serif",
-                boxShadow: "0 0 0 1px rgba(59,130,246,0.5), 0 4px 24px var(--w-blue-glow)",
-              }}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                "Sign in"
-              )}
-            </button>
-          </form>
+            {ssoChecking && (
+              <p className="text-xs text-[var(--w-text-3)]" style={{ fontFamily: "var(--font-jakarta), sans-serif" }}>
+                Checking company sign-in…
+              </p>
+            )}
+
+            {ssoAvailable && (
+              <button
+                type="button"
+                onClick={handleSsoLogin}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-[10px] text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
+                style={{
+                  background: "var(--w-blue)",
+                  fontFamily: "var(--font-jakarta), sans-serif",
+                  boxShadow: "0 0 0 1px rgba(59,130,246,0.5), 0 4px 24px var(--w-blue-glow)",
+                }}
+              >
+                <Shield className="h-4 w-4" aria-hidden />
+                Continue with your company sign-in
+              </button>
+            )}
+
+            {showPasswordForm && (
+              <form onSubmit={handleLogin} className="space-y-5">
+                <div>
+                  <label
+                    className="mb-2 block text-[11px] uppercase tracking-wider text-[var(--w-text-3)]"
+                    style={{ fontFamily: "var(--font-jakarta), sans-serif" }}
+                  >
+                    Password
+                  </label>
+                  <Input
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-11 w-full rounded-[10px] border text-[15px] text-[var(--w-text)] focus-visible:ring-[var(--w-blue)] focus-visible:ring-offset-0"
+                    style={{
+                      background: "var(--w-bg)",
+                      borderColor: "var(--w-border-md)",
+                      fontFamily: "var(--font-jakarta), sans-serif",
+                    }}
+                    required={!ssoAvailable}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="mt-6 flex h-11 w-full items-center justify-center gap-2 rounded-[10px] text-[15px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                  style={{
+                    background: "var(--w-blue)",
+                    fontFamily: "var(--font-jakarta), sans-serif",
+                    boxShadow: "0 0 0 1px rgba(59,130,246,0.5), 0 4px 24px var(--w-blue-glow)",
+                  }}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Signing in...
+                    </>
+                  ) : (
+                    "Sign in with password"
+                  )}
+                </button>
+              </form>
+            )}
+
+            {ssoAvailable && (
+              <p className="text-center text-xs text-[var(--w-text-3)]" style={{ fontFamily: "var(--font-jakarta), sans-serif" }}>
+                Your organization uses single sign-on for this domain.
+              </p>
+            )}
+          </div>
 
           <p
             className="mt-6 text-center text-sm text-[var(--w-text-2)]"

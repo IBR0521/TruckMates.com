@@ -227,6 +227,10 @@ async function fetchCustomerDetentionDefaults(
   return out
 }
 
+/**
+ * Superseded by `/api/cron/process-deadline-sweep` (deadline-tracking Phase 1).
+ * Kept for reference — dwell logic lives in `lib/detention/dwell-scan.ts`.
+ */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization")
   const cronSecret = process.env.CRON_SECRET
