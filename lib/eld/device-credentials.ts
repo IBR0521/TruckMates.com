@@ -12,15 +12,15 @@ export const ELD_DEVICE_SYNC_SELECT =
 
 type EldDeviceRow = Record<string, unknown>
 
-export function decryptEldDeviceCredentialFields<T extends EldDeviceRow>(row: T): T {
+export function decryptEldDeviceCredentialFields(row: EldDeviceRow): EldDeviceRow {
   const out = { ...row }
-  if (out.api_key != null && out.api_key !== "") {
+  if ("api_key" in out && out.api_key != null && out.api_key !== "") {
     out.api_key = decryptCredential(String(out.api_key))
   }
-  if (out.api_secret != null && out.api_secret !== "") {
+  if ("api_secret" in out && out.api_secret != null && out.api_secret !== "") {
     out.api_secret = decryptCredential(String(out.api_secret))
   }
-  return out as T
+  return out
 }
 
 function encryptCredentialFieldsInPatch(patch: EldDeviceRow): EldDeviceRow {
