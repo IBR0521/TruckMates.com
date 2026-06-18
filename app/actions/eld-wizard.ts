@@ -22,10 +22,10 @@ import { autoMatchVehicles } from "@/lib/eld/vehicle-auto-match"
 import { geotabNotesWithDatabase } from "@/lib/eld/geotab-url"
 import {
   createEldDeviceWithCredentials,
+  eldDeviceRowToSyncRow,
   getEldDeviceWithCredentials,
   updateEldDeviceCredentials,
 } from "@/lib/eld/device-credentials"
-import type { EldDeviceSyncRow } from "@/lib/types/eld-sync"
 
 export type EldWizardProvider = "samsara" | "motive" | "geotab"
 
@@ -167,8 +167,12 @@ export async function discoverVehiclesForDeviceAction(params: {
   }
 
   const device = deviceResult.data
+  const syncDevice = eldDeviceRowToSyncRow(device)
 
-  const discovered = await discoverVehiclesForDevice(device as EldDeviceSyncRow & { notes?: string })
+  const discovered = await discoverVehiclesForDevice({
+    ...syncDevice,
+    notes: device.notes != null ? String(device.notes) : undefined,
+  })
   if (discovered.error || !discovered.data) {
     return { data: null, error: discovered.error || "Discovery failed" }
   }
