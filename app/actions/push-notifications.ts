@@ -6,6 +6,24 @@ import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getFirebaseAdminMessaging } from "@/lib/firebase/admin"
 import { safeDbError } from "@/lib/utils/error"
+import { logger } from "@/lib/logger"
+
+let firebasePushConfigWarned = false
+
+function firebasePushConfigError(): string | null {
+  const projectId = process.env.FIREBASE_PROJECT_ID?.trim()
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim()
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.trim()
+  if (projectId && clientEmail && privateKey) return null
+
+  if (!firebasePushConfigWarned) {
+    firebasePushConfigWarned = true
+    logger.warn(
+      "[push-notifications] Push not configured — set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY",
+    )
+  }
+  return "Push notifications not configured (missing Firebase env vars)"
+}
 
 export async function saveFcmToken(fcmToken: string) {
   const token = String(fcmToken || "").trim()
@@ -42,6 +60,9 @@ export async function sendPushToUser(
   payload: { title: string; body: string; data?: Record<string, string> },
 ) {
   try {
+    const configError = firebasePushConfigError()
+    if (configError) return { sent: false, error: configError }
+
     const messaging = getFirebaseAdminMessaging()
     if (!messaging) return { sent: false, error: "Firebase admin is not configured" }
 
@@ -69,6 +90,9 @@ export async function sendPushToCompanyRoles(
   payload: { title: string; body: string; data?: Record<string, string> },
 ) {
   try {
+    const configError = firebasePushConfigError()
+    if (configError) return { sent: 0, error: configError }
+
     const messaging = getFirebaseAdminMessaging()
     if (!messaging) return { sent: 0, error: "Firebase admin is not configured" }
 

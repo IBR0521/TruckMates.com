@@ -366,11 +366,11 @@ export async function scanRouteDeviationsForCompany(companyId: string): Promise<
 
   const { data: routes, error } = await admin
     .from("routes")
-    .select("id, name, route_deviation_meters, status")
+    .select("id, name, current_deviation_meters, status")
     .eq("company_id", companyId)
-    .in("status", ["scheduled", "in_progress"])
-    .not("route_deviation_meters", "is", null)
-    .gt("route_deviation_meters", maxMeters)
+    .eq("status", "in_progress")
+    .not("current_deviation_meters", "is", null)
+    .gt("current_deviation_meters", maxMeters)
 
   if (error) {
     return { data: null, error: error.message || "Failed to scan routes" }
@@ -380,7 +380,7 @@ export async function scanRouteDeviationsForCompany(companyId: string): Promise<
   for (const route of routes || []) {
     const routeId = String(route.id || "")
     if (!routeId) continue
-    const deviationMiles = Math.round((Number(route.route_deviation_meters) / 1609.34) * 10) / 10
+    const deviationMiles = Math.round((Number(route.current_deviation_meters) / 1609.34) * 10) / 10
     notified += await notifyManagers(admin, companyId, "route_deviation", routeId, {
       title: `Route deviation: ${route.name || routeId}`,
       message: `Route ${route.name || routeId} is ${deviationMiles} mi off plan (limit ${maxMiles} mi).`,

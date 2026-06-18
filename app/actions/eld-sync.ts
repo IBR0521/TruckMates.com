@@ -8,6 +8,11 @@ import { fetchActiveEldDevicesForSync, getEldDeviceWithCredentials, eldDeviceRow
 import { recordBillableApiUsage } from "./api-usage"
 import type { EldDeviceSyncRow, EldDriverMappingRow, ProviderApiJson } from "@/lib/types/eld-sync"
 import { runFaultCodePipelineAfterEldSync } from "@/lib/eld/fault-codes-sync"
+import {
+  recomputeHosDeadlinesAfterEldLogSync,
+  snapshotDriverDutyForEldLogSync,
+} from "@/lib/eld/sync-hos-deadline-recompute"
+import { updateLiveRouteDeviation } from "@/lib/routes/update-live-route-deviation"
 import type { PostgrestError } from "@supabase/supabase-js"
 
 function getTimestampMs(input: unknown): number | null {
@@ -452,6 +457,11 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
 
     let logsError: PostgrestError | null = null
     if (logsToInsert.length > 0) {
+      const dutyBeforeSync = await snapshotDriverDutyForEldLogSync(
+        supabase,
+        device.company_id,
+        logsToInsert,
+      )
       const { error } = await supabase
         .from("eld_logs")
         .upsert(logsToInsert, { 
@@ -464,6 +474,8 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
         Sentry.captureException(logsError)
         return { error: `Failed to sync logs: ${logsError.message}`, data: null }
       }
+
+      await recomputeHosDeadlinesAfterEldLogSync(supabase, device.company_id, dutyBeforeSync)
     }
 
     // Store locations in database
@@ -502,6 +514,7 @@ async function syncKeepTruckinData(device: EldDeviceSyncRow, sinceMs?: number | 
         Sentry.captureException(locationsError)
         return { error: `Failed to sync locations: ${locationsError.message}`, data: null }
       }
+      await syncLiveRouteDeviationFromLatestLocation(supabase, device, locationsToInsert)
     }
 
     // Store events in database
@@ -985,6 +998,11 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
     })
 
     if (logsToInsert.length > 0) {
+      const dutyBeforeSync = await snapshotDriverDutyForEldLogSync(
+        supabase,
+        device.company_id,
+        logsToInsert,
+      )
       const { error: logsError } = await supabase
         .from("eld_logs")
         .upsert(logsToInsert, { 
@@ -996,6 +1014,8 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
         Sentry.captureException(logsError)
         return { error: `Failed to sync logs: ${logsError.message}`, data: null }
       }
+
+      await recomputeHosDeadlinesAfterEldLogSync(supabase, device.company_id, dutyBeforeSync)
     }
 
     // OPTIMIZATION: Batch fetch driver mappings for locations
@@ -1051,6 +1071,7 @@ async function syncSamsaraData(device: EldDeviceSyncRow, sinceMs?: number | null
         Sentry.captureException(locationsError)
         return { error: `Failed to sync locations: ${locationsError.message}`, data: null }
       }
+      await syncLiveRouteDeviationFromLatestLocation(supabase, device, locationsToInsert)
     }
 
     // OPTIMIZATION: Batch fetch driver mappings for events
@@ -1681,6 +1702,11 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
 
     let logsError: PostgrestError | null = null
     if (logsToInsert.length > 0) {
+      const dutyBeforeSync = await snapshotDriverDutyForEldLogSync(
+        supabase,
+        device.company_id,
+        logsToInsert,
+      )
       const { error } = await supabase
         .from("eld_logs")
         .upsert(logsToInsert, { 
@@ -1693,6 +1719,8 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
         Sentry.captureException(logsError)
         return { error: `Failed to sync logs: ${logsError.message}`, data: null }
       }
+
+      await recomputeHosDeadlinesAfterEldLogSync(supabase, device.company_id, dutyBeforeSync)
     }
 
     // Reuse driver mapping for locations if needed
@@ -1747,6 +1775,7 @@ async function syncGeotabData(device: EldDeviceSyncRow, sinceMs?: number | null)
         Sentry.captureException(locationsError)
         return { error: `Failed to sync locations: ${locationsError.message}`, data: null }
       }
+      await syncLiveRouteDeviationFromLatestLocation(supabase, device, locationsToInsert)
     }
 
     const eventsToInsert = events.map((event) => {
@@ -2101,7 +2130,21 @@ function calculateDuration(start: string, end: string): number | null {
   }
 }
 
-/** Map `eld_devices` row (admin fetch) into the shape used by provider sync functions — see lib/eld/device-credentials.ts */
+async function syncLiveRouteDeviationFromLatestLocation(
+  supabase: ReturnType<typeof createAdminClient>,
+  device: EldDeviceSyncRow,
+  locations: Array<{ latitude: number | null; longitude: number | null }>
+) {
+  if (!device.truck_id || locations.length === 0) return
+  const latest = locations[locations.length - 1]
+  if (latest.latitude == null || latest.longitude == null) return
+  await updateLiveRouteDeviation(supabase, {
+    companyId: device.company_id,
+    truckId: device.truck_id,
+    latitude: latest.latitude,
+    longitude: latest.longitude,
+  })
+}
 
 /**
  * Sync one device using service role (no user session). Used by Vercel/pg cron only.

@@ -33,6 +33,10 @@ import {
   processMissedCheckCallDeadline,
 } from "@/app/actions/dispatch-event-notify"
 import { createAdminClient } from "@/lib/supabase/admin"
+import {
+  DEADLINE_SWEEP_DEDUP,
+  hasRecentDeadlineSweepNotification,
+} from "@/lib/deadlines/deadline-sweep-dedup"
 
 const JOB_NAME = "process-deadline-sweep"
 const LOCK_SECONDS = 90
@@ -40,7 +44,7 @@ const LOCK_SECONDS = 90
 const DRIVER_LATE_RECHECK_MS = 12 * 60 * 60 * 1000
 
 function logDeadlineSweep(
-  outcome: "alert_fired" | "stale_no_alert" | "recheck_rescheduled",
+  outcome: "alert_fired" | "stale_no_alert" | "recheck_rescheduled" | "dedup_skipped",
   row: ScheduledDeadlineRow,
   extra?: Record<string, unknown>,
 ) {
@@ -73,15 +77,29 @@ async function processDriverHosDeadline(row: ScheduledDeadlineRow) {
   const violated = hosSummaryHasActiveViolation(snapshot.summary) || snapshot.summary.needsBreak
 
   if (violated) {
-    const fired = await fireHosViolationAlertIfNeeded({
+    const deduped = await hasRecentDeadlineSweepNotification({
       companyId: driver.company_id,
-      driverId,
-      summary: snapshot.summary,
+      notificationTypes: [...DEADLINE_SWEEP_DEDUP.hos.notificationTypes],
+      entityMetadataKeys: [...DEADLINE_SWEEP_DEDUP.hos.entityMetadataKeys],
+      entityId: driverId,
     })
-    logDeadlineSweep(fired ? "alert_fired" : "stale_no_alert", row, {
-      company_id: driver.company_id,
-      violations: snapshot.summary.violations,
-    })
+    if (deduped) {
+      logDeadlineSweep("dedup_skipped", row, {
+        company_id: driver.company_id,
+        driver_id: driverId,
+        violations: snapshot.summary.violations,
+      })
+    } else {
+      const fired = await fireHosViolationAlertIfNeeded({
+        companyId: driver.company_id,
+        driverId,
+        summary: snapshot.summary,
+      })
+      logDeadlineSweep(fired ? "alert_fired" : "stale_no_alert", row, {
+        company_id: driver.company_id,
+        violations: snapshot.summary.violations,
+      })
+    }
   } else {
     logDeadlineSweep("stale_no_alert", row, { company_id: driver.company_id })
   }
@@ -107,17 +125,32 @@ async function processLoadDetentionDeadline(row: ScheduledDeadlineRow) {
     return
   }
 
-  const fired = await fireDetentionAlertIfNeeded({
+  const deduped = await hasRecentDeadlineSweepNotification({
     companyId: load.company_id,
-    load,
-    evalResult,
+    notificationTypes: [...DEADLINE_SWEEP_DEDUP.detention.notificationTypes],
+    entityMetadataKeys: [...DEADLINE_SWEEP_DEDUP.detention.entityMetadataKeys],
+    entityId: loadId,
+    metadataEvent: DEADLINE_SWEEP_DEDUP.detention.metadataEvent,
   })
+  if (deduped) {
+    logDeadlineSweep("dedup_skipped", row, {
+      company_id: load.company_id,
+      load_id: loadId,
+      excess_minutes: evalResult.excessMinutes,
+    })
+  } else {
+    const fired = await fireDetentionAlertIfNeeded({
+      companyId: load.company_id,
+      load,
+      evalResult,
+    })
 
-  logDeadlineSweep(fired ? "alert_fired" : "stale_no_alert", row, {
-    company_id: load.company_id,
-    excess_minutes: evalResult.excessMinutes,
-    escalation_tier: evalResult.escalationTier,
-  })
+    logDeadlineSweep(fired ? "alert_fired" : "stale_no_alert", row, {
+      company_id: load.company_id,
+      excess_minutes: evalResult.excessMinutes,
+      escalation_tier: evalResult.escalationTier,
+    })
+  }
 
   // Detention accrues over time — keep checking on a short interval until dwell ends.
   await upsertDeadline("load_detention", loadId, nextDetentionRecheckDeadline(), row.deadline_reason)
@@ -155,13 +188,26 @@ async function processLoadDeliveryDeadline(row: ScheduledDeadlineRow) {
     return
   }
 
-  const result = await scanDeliveryDelaysForCompany(rowLoad.company_id)
-  const notified = result.data?.notified ?? 0
-
-  logDeadlineSweep(notified > 0 ? "alert_fired" : "stale_no_alert", row, {
-    company_id: rowLoad.company_id,
-    notified,
+  const deduped = await hasRecentDeadlineSweepNotification({
+    companyId: rowLoad.company_id,
+    notificationTypes: [...DEADLINE_SWEEP_DEDUP.delivery.notificationTypes],
+    entityMetadataKeys: [...DEADLINE_SWEEP_DEDUP.delivery.entityMetadataKeys],
+    entityId: loadId,
+    metadataEvent: DEADLINE_SWEEP_DEDUP.delivery.metadataEvent,
   })
+
+  if (deduped) {
+    logDeadlineSweep("dedup_skipped", row, { company_id: rowLoad.company_id, load_id: loadId })
+  } else {
+    const result = await scanDeliveryDelaysForCompany(rowLoad.company_id)
+    const notified = result.data?.notified ?? 0
+
+    logDeadlineSweep(notified > 0 ? "alert_fired" : "stale_no_alert", row, {
+      company_id: rowLoad.company_id,
+      notified,
+      load_id: loadId,
+    })
+  }
 
   await resolveDeadline("load_delivery", loadId)
 }

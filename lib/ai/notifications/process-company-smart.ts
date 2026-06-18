@@ -296,18 +296,7 @@ export async function processSmartNotificationsForCompany(companyId: string): Pr
     }
   }
 
-  if (await shouldThrottleCompany(admin, companyId)) {
-    return {
-      scored: 0,
-      proactive_created: 0,
-      resolved: 0,
-      deleted: 0,
-      skippedThrottle: true,
-      skippedPlan: false,
-      skippedNoSmartUser: false,
-      error: null,
-    }
-  }
+  const throttled = await shouldThrottleCompany(admin, companyId)
 
   const smartUser = await companyHasSmartModeUser(admin, companyId)
   if (!smartUser) {
@@ -317,7 +306,7 @@ export async function processSmartNotificationsForCompany(companyId: string): Pr
       proactive_created: 0,
       resolved: 0,
       deleted: 0,
-      skippedThrottle: false,
+      skippedThrottle: throttled,
       skippedPlan: false,
       skippedNoSmartUser: true,
       error: null,
@@ -394,12 +383,16 @@ export async function processSmartNotificationsForCompany(companyId: string): Pr
     }
   }
 
-  const proactive = await generateProactiveAlerts({ companyId })
   let proactive_created = 0
-  if (!proactive.error && proactive.data) {
-    for (const alert of proactive.data) {
-      const ins = await insertProactiveIfNew(admin, companyId, alert)
-      if (ins === "created") proactive_created += 1
+  let proactiveError: string | null = null
+  if (!throttled) {
+    const proactive = await generateProactiveAlerts({ companyId })
+    proactiveError = proactive.error
+    if (!proactive.error && proactive.data) {
+      for (const alert of proactive.data) {
+        const ins = await insertProactiveIfNew(admin, companyId, alert)
+        if (ins === "created") proactive_created += 1
+      }
     }
   }
 
@@ -413,9 +406,9 @@ export async function processSmartNotificationsForCompany(companyId: string): Pr
     proactive_created,
     resolved,
     deleted,
-    skippedThrottle: false,
+    skippedThrottle: throttled,
     skippedPlan: false,
     skippedNoSmartUser: false,
-    error: proactive.error,
+    error: proactiveError,
   }
 }

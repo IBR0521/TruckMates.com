@@ -655,39 +655,18 @@ export default function SettingsPage() {
             </div>
           </Card>
 
-          {/* Security Settings — per-user controls live under Account settings */}
+          {/* Security Settings */}
           <Card className="border-border p-6">
             <div className="flex items-center gap-3 mb-6">
               <Shield className="w-5 h-5 text-primary" />
               <h2 className="text-xl font-bold text-foreground">Security Settings</h2>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
-              Company-wide two-factor authentication and session timeout are not configurable here yet.
-              Each user can change their password and manage account security under{" "}
-              <a href="/dashboard/settings/account" className="text-primary underline">
-                My account
-              </a>
-              .
+              Manage two-factor authentication and other per-user security controls.
             </p>
-            <div className="space-y-4 opacity-60 pointer-events-none">
-              <div className="flex items-center justify-between p-4 bg-secondary/50 rounded-lg">
-                <div>
-                  <p className="text-foreground font-medium">Two-Factor Authentication</p>
-                  <p className="text-sm text-muted-foreground">Coming soon — managed per user</p>
-                </div>
-                <Switch checked={false} disabled />
-              </div>
-              <div className="p-4 bg-secondary/50 rounded-lg">
-                <Label htmlFor="session-timeout">Session Timeout (minutes)</Label>
-                <Input
-                  id="session-timeout"
-                  type="number"
-                  value="60"
-                  disabled
-                  className="mt-2 max-w-xs"
-                />
-              </div>
-            </div>
+            <Button asChild variant="outline">
+              <a href="/dashboard/settings/security">Open security settings</a>
+            </Button>
           </Card>
 
           {/* System Settings */}

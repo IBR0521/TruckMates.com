@@ -3,6 +3,7 @@ import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getMobileAuthContext } from "@/lib/auth/mobile"
 import { rateLimitRedis, retryAfterFromReset } from "@/lib/rate-limit-redis"
+import { updateLiveRouteDeviation } from "@/lib/routes/update-live-route-deviation"
 
 type StateCrossingCacheEntry = {
   lat: number
@@ -204,6 +205,20 @@ export async function POST(request: NextRequest) {
         )
       }
       insertedCount += batch.length
+    }
+
+    if (device.truck_id && locationsToInsert.length > 0) {
+      const latest = locationsToInsert[locationsToInsert.length - 1]!
+      try {
+        await updateLiveRouteDeviation(supabase, {
+          companyId,
+          truckId: device.truck_id,
+          latitude: latest.latitude,
+          longitude: latest.longitude,
+        })
+      } catch (deviationError) {
+        console.error("Route deviation update error (non-blocking):", deviationError)
+      }
     }
 
     // Check geofences for the latest location (backend engine via RPC; fallback to legacy action)

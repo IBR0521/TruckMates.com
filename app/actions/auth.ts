@@ -8,6 +8,7 @@ import * as Sentry from "@sentry/nextjs"
 import { headers } from "next/headers"
 import { rateLimitRedis } from "@/lib/rate-limit-redis"
 import { isSafeRelativeLoginNext, resolvePostLoginRedirect } from "@/lib/auth/post-login-redirect"
+import { createPendingTotpSession, userHasVerifiedTotp } from "@/app/actions/totp"
 
 async function enforceAuthRateLimit(bucket: string, identifier: string, limit: number, windowSeconds: number) {
   const hdrs = await headers()
@@ -23,7 +24,10 @@ export async function signInWithCredentials(params: {
   email: string
   password: string
   next?: string | null
-}): Promise<{ data: { redirectTo: string } | null; error: string | null }> {
+}): Promise<{
+  data: { redirectTo: string; requiresTotp?: boolean; pendingId?: string } | null
+  error: string | null
+}> {
   const email = params.email.trim()
   const password = params.password
 
@@ -33,13 +37,32 @@ export async function signInWithCredentials(params: {
   }
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) {
     return { data: null, error: error.message || "Login failed" }
   }
 
+  const userId = authData.user?.id
   const rawNext = params.next?.trim() || null
   const safeNext = isSafeRelativeLoginNext(rawNext) ? rawNext : "/dashboard"
+
+  if (userId && (await userHasVerifiedTotp(userId))) {
+    await supabase.auth.signOut()
+    const pendingId = await createPendingTotpSession(userId)
+    if (!pendingId) {
+      return { data: null, error: "Unable to start two-factor verification. Please try again." }
+    }
+    const nextQuery = safeNext !== "/dashboard" ? `&next=${encodeURIComponent(safeNext)}` : ""
+    return {
+      data: {
+        requiresTotp: true,
+        pendingId,
+        redirectTo: `/auth/totp-challenge?pending=${encodeURIComponent(pendingId)}${nextQuery}`,
+      },
+      error: null,
+    }
+  }
+
   const redirectTo = await resolvePostLoginRedirect(supabase, safeNext)
   return { data: { redirectTo }, error: null }
 }

@@ -68,6 +68,12 @@ export default function LoginPage() {
         return
       }
 
+      if (result.data?.requiresTotp) {
+        router.push(result.data.redirectTo)
+        setIsLoading(false)
+        return
+      }
+
       toast.success("Login successful")
       router.refresh()
       router.push(result.data!.redirectTo)
