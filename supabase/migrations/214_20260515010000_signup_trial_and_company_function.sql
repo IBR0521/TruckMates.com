@@ -1,5 +1,8 @@
 -- New companies: 14-day trial on Starter tier (explicit trial end timestamp).
 
+DROP FUNCTION IF EXISTS public.create_company_for_user(TEXT, TEXT, TEXT, UUID);
+DROP FUNCTION IF EXISTS public.create_company_for_user(TEXT, TEXT, TEXT, UUID, TEXT);
+
 CREATE OR REPLACE FUNCTION public.create_company_for_user(
   p_name TEXT,
   p_email TEXT,

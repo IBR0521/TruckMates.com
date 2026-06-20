@@ -18,6 +18,7 @@ import {
 import { getPlanFeatureGate } from "@/app/actions/plan-usage"
 import { useDashboardShell } from "@/components/dashboard/shell-bootstrap-provider"
 import {
+  bootstrapAiChatSession,
   createConversation,
   getConversation,
   getConversations,
@@ -161,6 +162,8 @@ export function AiChatWidget() {
   const [actionsModeLabel, setActionsModeLabel] = useState("Read-only answers")
   const [input, setInput] = useState("")
   const [recent, setRecent] = useState<Array<{ id: string; title: string }>>([])
+  const [sessionReady, setSessionReady] = useState(false)
+  const bootstrapInFlightRef = useRef(false)
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
   const pendingDerived = useMemo(() => derivePendingFromMessages(messages), [messages])
@@ -207,58 +210,46 @@ export function AiChatWidget() {
     setMessages(conv.data.messages.map(mapApiMessage))
   }, [conversationId])
 
+  const applyBootstrap = useCallback(
+    (data: NonNullable<Awaited<ReturnType<typeof bootstrapAiChatSession>>["data"]>) => {
+      setRecent(data.conversations.map((r) => ({ id: r.id, title: r.title })))
+      setConversationId(data.active.id)
+      setTitle(data.active.title)
+      setEnableToolsMode(data.enableTools)
+      setActionsModeLabel(data.actionsModeLabel || (data.enableTools ? "Actions enabled" : "Read-only answers"))
+      setMessages(data.active.messages.map(mapApiMessage))
+      setSessionReady(true)
+    },
+    [],
+  )
+
   const bootstrapConversation = useCallback(async () => {
+    if (sessionReady && conversationId) return
+    if (bootstrapInFlightRef.current) return
+    bootstrapInFlightRef.current = true
     setBusy(true)
     try {
-      const list = await getConversations()
-      if (list.error) {
-        toast.error(list.error)
+      const res = await bootstrapAiChatSession()
+      if (res.error || !res.data) {
+        toast.error(res.error || "Could not load AI assistant")
         return
       }
-      const rows = list.data || []
-      setRecent(rows.map((r) => ({ id: r.id, title: r.title })))
-      if (rows.length > 0) {
-        const first = rows[0]
-        setConversationId(first.id)
-        setTitle(first.title)
-        const conv = await getConversation(first.id)
-        if (conv.error || !conv.data) {
-          toast.error(conv.error || "Could not load conversation")
-          return
-        }
-        setEnableToolsMode(Boolean(conv.meta?.enableTools))
-    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
-        setMessages(conv.data.messages.map(mapApiMessage))
-        return
-      }
-      const created = await createConversation()
-      if (created.error || !created.data) {
-        toast.error(created.error || "Could not start a conversation")
-        return
-      }
-      const newId = created.data.id
-      setConversationId(newId)
-      setTitle("New conversation")
-      setRecent([{ id: newId, title: "New conversation" }])
-      const conv = await getConversation(newId)
-      if (conv.data) {
-        setEnableToolsMode(Boolean(conv.meta?.enableTools))
-    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
-        setMessages(conv.data.messages.map(mapApiMessage))
-      } else {
-        setMessages([])
-        setEnableToolsMode(false)
-        setActionsModeLabel("Read-only answers")
-      }
+      applyBootstrap(res.data)
     } finally {
+      bootstrapInFlightRef.current = false
       setBusy(false)
     }
-  }, [])
+  }, [applyBootstrap, conversationId, sessionReady])
 
   useEffect(() => {
-    if (!open) return
+    if (eligible !== true) return
     void bootstrapConversation()
-  }, [open, bootstrapConversation])
+  }, [eligible, bootstrapConversation])
+
+  useEffect(() => {
+    if (!open || sessionReady) return
+    void bootstrapConversation()
+  }, [open, sessionReady, bootstrapConversation])
 
   const startNewConversation = async () => {
     setBusy(true)
@@ -272,14 +263,8 @@ export function AiChatWidget() {
       setConversationId(newId)
       setTitle("New conversation")
       setRecent((prev) => [{ id: newId, title: "New conversation" }, ...prev.filter((p) => p.id !== newId)])
-      const conv = await getConversation(newId)
-      if (conv.data) {
-        setEnableToolsMode(Boolean(conv.meta?.enableTools))
-    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
-        setMessages(conv.data.messages.map(mapApiMessage))
-      } else {
-        setMessages([])
-      }
+      setMessages([])
+      setSessionReady(true)
     } finally {
       setBusy(false)
     }

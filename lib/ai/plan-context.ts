@@ -1,4 +1,4 @@
-import { checkFeatureAccess, checkMonthlyUsage, getCompanyTier } from "@/lib/plan-enforcement"
+import { checkMonthlyUsage, getCompanyTier } from "@/lib/plan-enforcement"
 import {
   type PlanTier,
   hasFeatureAccess,
@@ -45,13 +45,13 @@ export type AiChatPlanContext = {
  * Used by assertAiChatAllowed, buildChatRequest companyTier, UI banners, and sidebar badges.
  */
 export async function resolveAiChatPlanContext(companyId: string): Promise<AiChatPlanContext> {
-  const tier = await getCompanyTier(companyId)
-  const chat = await checkFeatureAccess({ companyId, feature: "ai_chat" })
-  const actions = await checkFeatureAccess({ companyId, feature: "ai_advanced_actions" })
-  const usage = await checkMonthlyUsage({ companyId, usageType: "ai_calls" })
+  const [tier, usage] = await Promise.all([
+    getCompanyTier(companyId),
+    checkMonthlyUsage({ companyId, usageType: "ai_calls" }),
+  ])
+  const chatAllowed = hasFeatureAccess(tier, "ai_chat")
+  const enableTools = hasFeatureAccess(tier, "ai_advanced_actions")
   const remainingAiCalls = usage.limit === -1 ? -1 : Math.max(0, usage.limit - usage.used)
-
-  const enableTools = actions.allowed
   const tierBadge = planTierBadgeLabel(tier)
   const minimumActionsTier = minimumTierForFeature("ai_advanced_actions")
   const minimumActionsTierBadge = planTierBadgeLabel(minimumActionsTier)
@@ -63,7 +63,7 @@ export async function resolveAiChatPlanContext(companyId: string): Promise<AiCha
   return {
     tier,
     tierLabel: planTierLabel(tier),
-    chatAllowed: chat.allowed,
+    chatAllowed,
     enableTools,
     remainingAiCalls,
     actionsModeLabel,

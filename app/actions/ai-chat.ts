@@ -202,7 +202,6 @@ export async function getConversations(): Promise<{
     id: string
     title: string
     lastMessageAt: string
-    messageCount: number
   }> | null
   error: string | null
 }> {
@@ -228,20 +227,6 @@ export async function getConversations(): Promise<{
   }
 
   const rows = (data || []) as Array<{ id: string; title: string; last_message_at: string }>
-  const ids = rows.map((r) => r.id).filter(Boolean)
-  const counts = new Map<string, number>()
-  if (ids.length > 0) {
-    const { data: countRows, error: countError } = await admin.from("ai_chat_messages").select("conversation_id").in("conversation_id", ids)
-
-    if (countError) {
-      return { data: null, error: safeDbError(countError) }
-    }
-    for (const r of (countRows || []) as Array<{ conversation_id: string }>) {
-      const id = String(r.conversation_id || "")
-      if (!id) continue
-      counts.set(id, (counts.get(id) || 0) + 1)
-    }
-  }
 
   return {
     error: null,
@@ -249,8 +234,154 @@ export async function getConversations(): Promise<{
       id: r.id,
       title: r.title,
       lastMessageAt: r.last_message_at,
-      messageCount: counts.get(r.id) || 0,
     })),
+  }
+}
+
+type MappedChatMessage = {
+  id: string
+  role: ChatRole
+  content: string
+  createdAt: string
+  toolCalls: PersistedToolCall[] | null
+  toolResults: PersistedToolResult[] | null
+  pendingToolUseId: string | null
+}
+
+function mapChatMessageRows(
+  msgs: Array<{
+    id: string
+    role: string
+    content: string
+    created_at: string
+    tool_calls?: unknown
+    tool_results?: unknown
+    pending_tool_use_id?: string | null
+  }>,
+): MappedChatMessage[] {
+  return msgs
+    .filter((m) => isChatRole(m.role))
+    .map((m) => {
+      const toolResults = coerceToolResults(m.tool_results)
+      return {
+        id: m.id,
+        role: m.role as ChatRole,
+        content: m.content,
+        createdAt: m.created_at,
+        toolCalls: coerceToolCalls(m.tool_calls),
+        toolResults: toolResults.length > 0 ? toolResults : null,
+        pendingToolUseId: typeof m.pending_tool_use_id === "string" ? m.pending_tool_use_id : null,
+      }
+    })
+}
+
+/**
+ * Single round trip to list conversations and load the active one (or create a new empty conversation).
+ * Avoids duplicate auth/plan checks and sequential getConversations + getConversation calls on open.
+ */
+export async function bootstrapAiChatSession(): Promise<{
+  data: {
+    conversations: Array<{ id: string; title: string; lastMessageAt: string }>
+    active: {
+      id: string
+      title: string
+      messages: MappedChatMessage[]
+    }
+    enableTools: boolean
+    actionsModeLabel: string
+  } | null
+  error: string | null
+}> {
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId) {
+    return { data: null, error: ctx.error || "Not authenticated" }
+  }
+  const gate = await assertAiChatAllowed(ctx.companyId)
+  if (!gate.ok) return { data: null, error: gate.error }
+
+  const admin = createAdminClient()
+  const { data: convRows, error: listError } = await admin
+    .from("ai_conversations")
+    .select("id, title, last_message_at")
+    .eq("company_id", ctx.companyId)
+    .eq("user_id", ctx.userId)
+    .eq("archived", false)
+    .order("last_message_at", { ascending: false })
+    .limit(20)
+
+  if (listError) {
+    return { data: null, error: safeDbError(listError) }
+  }
+
+  const rows = (convRows || []) as Array<{ id: string; title: string; last_message_at: string }>
+  const conversations = rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    lastMessageAt: r.last_message_at,
+  }))
+
+  let activeId: string
+  let activeTitle: string
+
+  if (rows.length > 0) {
+    activeId = rows[0].id
+    activeTitle = String(rows[0].title || "New conversation")
+  } else {
+    const now = new Date().toISOString()
+    const { data: created, error: createError } = await admin
+      .from("ai_conversations")
+      .insert({
+        company_id: ctx.companyId,
+        user_id: ctx.userId,
+        title: "New conversation",
+        last_message_at: now,
+        updated_at: now,
+      })
+      .select("id")
+      .single()
+
+    if (createError || !created) {
+      return { data: null, error: safeDbError(createError) }
+    }
+    activeId = String((created as { id: string }).id)
+    activeTitle = "New conversation"
+    conversations.unshift({ id: activeId, title: activeTitle, lastMessageAt: now })
+  }
+
+  const { data: msgs, error: msgError } = await admin
+    .from("ai_chat_messages")
+    .select("id, role, content, created_at, tool_calls, tool_results, pending_tool_use_id")
+    .eq("conversation_id", activeId)
+    .eq("company_id", ctx.companyId)
+    .in("role", ["user", "assistant"])
+    .order("created_at", { ascending: true })
+
+  if (msgError) {
+    return { data: null, error: safeDbError(msgError) }
+  }
+
+  return {
+    error: null,
+    data: {
+      conversations,
+      active: {
+        id: activeId,
+        title: activeTitle,
+        messages: mapChatMessageRows(
+          (msgs || []) as Array<{
+            id: string
+            role: string
+            content: string
+            created_at: string
+            tool_calls?: unknown
+            tool_results?: unknown
+            pending_tool_use_id?: string | null
+          }>,
+        ),
+      },
+      enableTools: gate.enableTools,
+      actionsModeLabel: gate.actionsModeLabel,
+    },
   }
 }
 
@@ -308,28 +439,17 @@ export async function getConversation(conversationId: string): Promise<{
     return { data: null, error: safeDbError(msgError) }
   }
 
-  const messages = ((msgs || []) as Array<{
-    id: string
-    role: string
-    content: string
-    created_at: string
-    tool_calls?: unknown
-    tool_results?: unknown
-    pending_tool_use_id?: string | null
-  }>)
-    .filter((m) => isChatRole(m.role))
-    .map((m) => {
-      const toolResults = coerceToolResults(m.tool_results)
-      return {
-        id: m.id,
-        role: m.role as ChatRole,
-        content: m.content,
-        createdAt: m.created_at,
-        toolCalls: coerceToolCalls(m.tool_calls),
-        toolResults: toolResults.length > 0 ? toolResults : null,
-        pendingToolUseId: typeof m.pending_tool_use_id === "string" ? m.pending_tool_use_id : null,
-      }
-    })
+  const messages = mapChatMessageRows(
+    ((msgs || []) as Array<{
+      id: string
+      role: string
+      content: string
+      created_at: string
+      tool_calls?: unknown
+      tool_results?: unknown
+      pending_tool_use_id?: string | null
+    }>),
+  )
 
   return {
     error: null,

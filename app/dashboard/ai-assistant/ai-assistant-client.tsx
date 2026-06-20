@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import {
+  bootstrapAiChatSession,
   createConversation,
   getConversation,
   getConversations,
@@ -119,45 +120,34 @@ export function AiAssistantClient() {
     let cancelled = false
     async function init() {
       setBusy(true)
-      const list = await getConversations()
+      const res = await bootstrapAiChatSession()
       if (cancelled) return
-      if (list.error) {
-        toast.error(list.error)
+      if (res.error || !res.data) {
+        toast.error(res.error || "Could not load AI assistant")
         setBusy(false)
         return
       }
-      const rows = list.data || []
-      setSidebar(rows.map((r) => ({ id: r.id, title: r.title, lastMessageAt: r.lastMessageAt })))
-      if (rows.length > 0) {
-        await loadConversation(rows[0].id)
-        return
-      }
-      const created = await createConversation()
-      if (cancelled) return
-      if (created.error || !created.data) {
-        toast.error(created.error || "Could not start a conversation")
-        setBusy(false)
-        return
-      }
-      const newId = created.data.id
-      setConversationId(newId)
-      setTitle("New conversation")
-      setSidebar([{ id: newId, title: "New conversation", lastMessageAt: new Date().toISOString() }])
-      const conv = await getConversation(newId)
-      if (conv.data) {
-        setEnableToolsMode(Boolean(conv.meta?.enableTools))
-    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
-        setMessages(conv.data.messages.map(mapApiMessage))
-      } else {
-        setMessages([])
-      }
+      setSidebar(
+        res.data.conversations.map((r) => ({
+          id: r.id,
+          title: r.title,
+          lastMessageAt: r.lastMessageAt,
+        })),
+      )
+      setConversationId(res.data.active.id)
+      setTitle(res.data.active.title)
+      setEnableToolsMode(res.data.enableTools)
+      setActionsModeLabel(
+        res.data.actionsModeLabel || (res.data.enableTools ? "Actions enabled" : "Read-only answers"),
+      )
+      setMessages(res.data.active.messages.map(mapApiMessage))
       setBusy(false)
     }
     void init()
     return () => {
       cancelled = true
     }
-  }, [loadConversation])
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -186,14 +176,7 @@ export function AiAssistantClient() {
         { id: newId, title: "New conversation", lastMessageAt: new Date().toISOString() },
         ...prev.filter((p) => p.id !== newId),
       ])
-      const conv = await getConversation(newId)
-      if (conv.data) {
-        setEnableToolsMode(Boolean(conv.meta?.enableTools))
-    setActionsModeLabel(conv.meta?.actionsModeLabel || (conv.meta?.enableTools ? "Actions enabled" : "Read-only answers"))
-        setMessages(conv.data.messages.map(mapApiMessage))
-      } else {
-        setMessages([])
-      }
+      setMessages([])
     } finally {
       setBusy(false)
     }
