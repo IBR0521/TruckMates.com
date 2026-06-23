@@ -6,6 +6,7 @@ import { normalizePlanTier, tierAtLeast } from "@/lib/plan-limits"
 import { logAutomationEvent } from "@/lib/ai/agent/settings"
 import { insertProactiveIfNew } from "@/lib/ai/notifications/process-company-smart"
 import type { ProactiveAlert } from "@/lib/ai/notifications/proactive"
+import type { AppRole } from "@/lib/ai/tools/types"
 
 /** Long-running batch (per-company scans across several data domains). */
 export const maxDuration = 300
@@ -33,6 +34,29 @@ type Finding = {
 }
 
 type AdminClient = ReturnType<typeof createAdminClient>
+
+async function pickRecipientUserId(admin: AdminClient, companyId: string): Promise<string | null> {
+  const { data: preferred } = await admin
+    .from("users")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("notification_smart_mode", true)
+    .neq("role", "driver")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (preferred && typeof (preferred as { id: string }).id === "string") return (preferred as { id: string }).id
+
+  const { data: anyUser } = await admin
+    .from("users")
+    .select("id")
+    .eq("company_id", companyId)
+    .neq("role", "driver")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  return anyUser && typeof (anyUser as { id: string }).id === "string" ? (anyUser as { id: string }).id : null
+}
 
 function clampConfidence(value: number): number {
   if (!Number.isFinite(value)) return 0
@@ -412,8 +436,18 @@ async function detectFaultTrend(admin: AdminClient, companyId: string): Promise<
     .slice(0, MAX_FINDINGS_PER_DETECTOR)
 }
 
-async function processCompany(companyId: string): Promise<{ surfaced: number; suppressed: number }> {
+async function processCompany(company: CompanyRow): Promise<{ surfaced: number; suppressed: number }> {
   const admin = createAdminClient()
+  const companyId = company.id
+  const recipientUserId = await pickRecipientUserId(admin, companyId)
+  const insertCtx: { userId: string; userRole: AppRole; companyTier: ReturnType<typeof normalizePlanTier> } | null =
+    recipientUserId
+      ? {
+          userId: recipientUserId,
+          userRole: "operations_manager",
+          companyTier: normalizePlanTier(company.subscription_tier),
+        }
+      : null
 
   const detectors = await Promise.all([
     detectLaneLosses(admin, companyId).catch(() => [] as Finding[]),
@@ -433,7 +467,9 @@ async function processCompany(companyId: string): Promise<{ surfaced: number; su
       continue
     }
 
-    const inserted = await insertProactiveIfNew(admin, companyId, finding.alert)
+    if (!insertCtx) continue
+
+    const inserted = await insertProactiveIfNew(admin, companyId, finding.alert, insertCtx)
     const triggered = inserted === "created"
     if (triggered) surfaced += 1
 
@@ -498,7 +534,7 @@ export async function GET(request: Request) {
       }
 
       try {
-        const result = await processCompany(company.id)
+        const result = await processCompany(company)
         processed += 1
         surfaced += result.surfaced
         suppressed += result.suppressed
