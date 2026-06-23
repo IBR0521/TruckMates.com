@@ -5,12 +5,14 @@ import { toast } from "sonner"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { AlertTriangle, ChevronDown, Pause, Play, Settings2, Clock, CheckCircle2, XCircle, RotateCcw } from "lucide-react"
 import { createClient as createBrowserClient } from "@/lib/supabase/client"
 import { loadCompanyAutomationSettings, saveAutomationConfig } from "./actions"
 import type { AutomationConfig } from "@/lib/ai/agent/types"
+import { CASH_FLOW_TIER0 } from "@/lib/ai/agent/cash-flow-gate"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 
@@ -454,6 +456,51 @@ export function AiAutomationClientPage({ companyId }: { companyId: string }) {
                                   <span>95% — acts only when certain</span>
                                 </div>
                               </div>
+
+                              {item.key === "cash_flow_alert" && (
+                                <div className="space-y-2">
+                                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Cash Position Alert Threshold (USD)
+                                  </label>
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    step={500}
+                                    disabled={disabled}
+                                    value={Number(
+                                      config.config?.[CASH_FLOW_TIER0.projectionThresholdConfigKey] ??
+                                        CASH_FLOW_TIER0.defaultProjectionThresholdUsd,
+                                    )}
+                                    onChange={(e) => {
+                                      const parsed = Number(e.target.value)
+                                      if (!Number.isFinite(parsed) || parsed < 0) return
+                                      setConfigs((c) => ({
+                                        ...c,
+                                        [item.key]: {
+                                          ...c[item.key],
+                                          config: {
+                                            ...c[item.key].config,
+                                            [CASH_FLOW_TIER0.projectionThresholdConfigKey]: parsed,
+                                          },
+                                        },
+                                      }))
+                                    }}
+                                    onBlur={(e) => {
+                                      const parsed = Number(e.target.value)
+                                      if (!Number.isFinite(parsed) || parsed < 0) return
+                                      void upsertConfigOptimistic(item.key, {
+                                        config: {
+                                          ...config.config,
+                                          [CASH_FLOW_TIER0.projectionThresholdConfigKey]: parsed,
+                                        },
+                                      })
+                                    }}
+                                  />
+                                  <p className="text-[11px] text-muted-foreground">
+                                    Alert when projected 14-day cash position falls below this amount, or when projection moves materially vs. the last check.
+                                  </p>
+                                </div>
+                              )}
                             </div>
 
                             {/* Recent activity */}

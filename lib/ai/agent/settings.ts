@@ -31,7 +31,12 @@ export const DEFAULT_AUTOMATION_CONFIGS: Record<string, DefaultAutomationConfig>
   idle_time_alert: { level: "autonomous", confidenceThreshold: 80, enabled: true, config: {} },
   unresponsive_driver: { level: "autonomous", confidenceThreshold: 85, enabled: true, config: {} },
   churn_risk: { level: "approval", confidenceThreshold: 65, enabled: true, config: {} },
-  cash_flow_alert: { level: "autonomous", confidenceThreshold: 80, enabled: true, config: {} },
+  cash_flow_alert: {
+    level: "autonomous",
+    confidenceThreshold: 80,
+    enabled: true,
+    config: { projectionThresholdUsd: 10_000 },
+  },
 }
 
 type AutomationConfigRow = {
@@ -161,6 +166,29 @@ export async function getAutomationConfig(
 ): Promise<{ data: AutomationConfig | null; error: string | null }> {
   try {
     const supabase = await createClient()
+    const { data, error } = await supabase
+      .from("ai_automation_configs")
+      .select("id, company_id, automation_type, level, enabled, confidence_threshold, config, created_at, updated_at")
+      .eq("company_id", companyId)
+      .eq("automation_type", automationType)
+      .maybeSingle()
+
+    if (error) return { data: null, error: error.message || "Failed to load automation config" }
+    if (!data) return { data: buildDefaultConfig(companyId, automationType), error: null }
+
+    return { data: mapAutomationConfigRow(data as unknown as AutomationConfigRow), error: null }
+  } catch (error: unknown) {
+    return { data: null, error: error instanceof Error ? error.message : "Failed to load automation config" }
+  }
+}
+
+/** Cron/admin path — same as getAutomationConfig but uses service role (no user session). */
+export async function getAutomationConfigAdmin(
+  companyId: string,
+  automationType: string,
+): Promise<{ data: AutomationConfig | null; error: string | null }> {
+  try {
+    const supabase = createAdminClient()
     const { data, error } = await supabase
       .from("ai_automation_configs")
       .select("id, company_id, automation_type, level, enabled, confidence_threshold, config, created_at, updated_at")
@@ -329,5 +357,35 @@ export async function resolveApproval(
     return { error: null }
   } catch (error: unknown) {
     return { error: error instanceof Error ? error.message : "Failed to resolve approval" }
+  }
+}
+
+/**
+ * Close expired, unresolved pending approvals for one automation type.
+ * Scoped helper — safe to call from cash_flow cron without affecting other triggers.
+ */
+export async function expireStalePendingApprovals(automationType: string): Promise<number> {
+  try {
+    const supabase = createAdminClient()
+    const now = new Date().toISOString()
+    const { data, error } = await supabase
+      .from("ai_pending_approvals")
+      .update({
+        approved: false,
+        resolved_at: now,
+      })
+      .eq("automation_type", automationType)
+      .is("resolved_at", null)
+      .lt("expires_at", now)
+      .select("id")
+
+    if (error) {
+      console.error("[expireStalePendingApprovals]", automationType, error.message)
+      return 0
+    }
+    return data?.length ?? 0
+  } catch (error) {
+    console.error("[expireStalePendingApprovals]", automationType, error)
+    return 0
   }
 }

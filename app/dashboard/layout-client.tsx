@@ -16,6 +16,7 @@ import { DashboardBillingBanners } from "@/components/billing/dashboard-billing-
 import { AiQuotaBanner } from "@/components/billing/ai-quota-banner"
 import { TrialHeaderBadge } from "@/components/billing/trial-header-badge"
 import { DashboardShellProvider } from "@/components/dashboard/shell-bootstrap-provider"
+import { ProactiveRecommendationsPanel } from "@/components/ai/proactive-recommendations-panel"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -164,6 +165,9 @@ export default function DashboardLayoutClient({
           {children}
         </main>
       </div>
+
+      {/* Persistent AI recommendations (Phase 2 UI surface) */}
+      <ProactiveRecommendationsPanel />
 
       {/* Floating Feedback Widget */}
       <FeedbackWidget />

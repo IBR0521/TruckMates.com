@@ -8,8 +8,9 @@ import {
   getMaintenanceContext,
 } from "@/lib/ai/context"
 import { executeAgentAction } from "@/lib/ai/agent/executor"
+import { extractDedupFingerprint, fingerprintsOverlap } from "@/lib/ai/agent/dedup-fingerprints"
 import { createPendingApproval, getAutomationConfig, logAutomationEvent } from "@/lib/ai/agent/settings"
-import { chooseModel } from "@/lib/ai/model-router"
+import { chooseAgentDecisionModel } from "@/lib/ai/model-router"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { LOGISTICS_SYSTEM_PROMPT } from "@/lib/ai/prompts/system"
 import { sendPushToCompanyRoles } from "@/app/actions/push-notifications"
@@ -29,16 +30,6 @@ type ContextType = "fleet" | "driver" | "load" | "financial" | "compliance" | "m
  * duplicate actions and wasted model calls. Tune here.
  */
 const AGENT_DEDUP_COOLDOWN_MINUTES = 60
-
-/**
- * Canonical entity identifiers we de-duplicate on. Mirrors the keys read in {@link assembleContext},
- * accepting both camelCase and snake_case variants found in trigger data.
- */
-const DEDUP_ENTITY_KEYS: ReadonlyArray<{ canonical: "driver" | "load" | "truck"; keys: readonly string[] }> = [
-  { canonical: "driver", keys: ["driverId", "driver_id"] },
-  { canonical: "load", keys: ["loadId", "load_id"] },
-  { canonical: "truck", keys: ["truckId", "truck_id"] },
-]
 
 type RunAgentEvaluationParams = {
   companyId: string
@@ -117,26 +108,6 @@ async function assembleContext(
   return contextBlocks.filter(Boolean).join("\n\n")
 }
 
-/** Pull the canonical entity ids (driver/load/truck) present in a trigger-data record. */
-function extractEntityIds(triggerData: Record<string, unknown>): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const { canonical, keys } of DEDUP_ENTITY_KEYS) {
-    for (const key of keys) {
-      const value = toString(triggerData[key] || "")
-      if (value) {
-        out[canonical] = value
-        break
-      }
-    }
-  }
-  return out
-}
-
-/** True when two entity-id maps reference at least one identical (type, id) pair. */
-function entitiesOverlap(a: Record<string, string>, b: Record<string, string>): boolean {
-  return Object.keys(a).some((canonical) => Boolean(a[canonical]) && a[canonical] === b[canonical])
-}
-
 /**
  * Look for a recent automation event for the same company + automation type that already resulted in
  * an action taken or pending approval (triggered = true) for the same entity, within the cooldown
@@ -170,7 +141,8 @@ async function findRecentDuplicateEvent(params: {
         payload.triggerData && typeof payload.triggerData === "object" && !Array.isArray(payload.triggerData)
           ? (payload.triggerData as Record<string, unknown>)
           : {}
-      if (entitiesOverlap(params.currentEntities, extractEntityIds(rowTrigger))) {
+      const rowFingerprint = extractDedupFingerprint(params.automationType, rowTrigger)
+      if (fingerprintsOverlap(params.currentEntities, rowFingerprint)) {
         return { id: String(row.id), createdAt: String(row.created_at) }
       }
     }
@@ -231,23 +203,22 @@ export async function runAgentEvaluation(params: RunAgentEvaluationParams): Prom
     return { decision, executed: false, pendingApprovalId: null }
   }
 
-  // De-duplication guard: if we already acted (or queued an approval) for this same entity under the
-  // same automation within the cooldown window, skip re-evaluating to avoid duplicate actions and a
-  // wasted model call. Only applies when the trigger references a concrete entity.
-  const currentEntities = extractEntityIds(params.triggerData)
-  if (Object.keys(currentEntities).length > 0) {
+  // De-duplication guard: skip when the same entity or fingerprint already triggered an action
+  // or pending approval within the cooldown window.
+  const dedupFingerprint = extractDedupFingerprint(params.trigger, params.triggerData)
+  if (Object.keys(dedupFingerprint).length > 0) {
     const duplicate = await findRecentDuplicateEvent({
       companyId: params.companyId,
       automationType: params.trigger,
-      currentEntities,
+      currentEntities: dedupFingerprint,
       cooldownMinutes: AGENT_DEDUP_COOLDOWN_MINUTES,
     })
 
     if (duplicate) {
-      const entitySummary = Object.entries(currentEntities)
+      const fingerprintSummary = Object.entries(dedupFingerprint)
         .map(([type, id]) => `${type} ${id}`)
         .join(", ")
-      const reasoning = `Skipped: a '${params.trigger}' action for ${entitySummary} was already taken or is pending within the last ${AGENT_DEDUP_COOLDOWN_MINUTES} minutes (cooldown).`
+      const reasoning = `Skipped: a '${params.trigger}' action for ${fingerprintSummary} was already taken or is pending within the last ${AGENT_DEDUP_COOLDOWN_MINUTES} minutes (cooldown).`
       const decision = buildFallbackDecision(reasoning)
       await logAutomationEvent({
         companyId: params.companyId,
@@ -293,7 +264,7 @@ export async function runAgentEvaluation(params: RunAgentEvaluationParams): Prom
   const aiResponse = await callClaude<AiDecisionPayload>(LOGISTICS_SYSTEM_PROMPT, decisionPrompt, {
     expectJson: true,
     maxTokens: 800,
-    model: chooseModel("agent_decision"),
+    model: chooseAgentDecisionModel(params.trigger),
     feature: `agent_${params.trigger}`,
     companyId: params.companyId,
     cacheSystemPrompt: true,

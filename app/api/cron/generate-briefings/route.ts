@@ -9,6 +9,7 @@ import {
   generateBriefingForCompany,
   insertMorningBriefingRecord,
 } from "@/lib/ai/briefing"
+import { stageBriefingActionableRecommendations } from "@/lib/ai/briefing-actionable"
 
 /** Long-running batch; matches vercel.json override for this route. */
 export const maxDuration = 300
@@ -91,6 +92,20 @@ async function processCompany(params: {
       return "failed"
     }
     if (ins.duplicate) return "skipped"
+
+    const staged = await stageBriefingActionableRecommendations({
+      companyId: params.companyId,
+      briefingDate,
+      briefing: gen.data,
+    })
+    if (staged.staged > 0 || staged.failed > 0) {
+      console.log("[generate-briefings] Actionable staging", {
+        companyId: params.companyId,
+        briefingDate,
+        ...staged,
+      })
+    }
+
     return "generated"
   } catch (err: unknown) {
     Sentry.captureException(err, { extra: { companyId: params.companyId } })

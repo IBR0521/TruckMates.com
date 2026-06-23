@@ -9,45 +9,16 @@ import {
   getLoadContext,
   getMaintenanceContext,
 } from "@/lib/ai/context"
+import { isAiBriefingActionableRecommendationsEnabled } from "@/lib/ai/feature-flags"
+import {
+  buildBriefingToolCatalogSection,
+  gatherBriefingEntityContext,
+  parseBriefingSuggestedTool,
+  sanitizeBriefingSuggestedTools,
+} from "@/lib/ai/briefing-actionable"
+import type { BriefingAlert, BriefingRecommendation, MorningBriefing } from "@/lib/ai/briefing-types"
 
-export type BriefingAlert = {
-  severity: "critical" | "high" | "medium"
-  category: "compliance" | "operations" | "financial" | "safety"
-  title: string
-  description: string
-  action_url?: string
-  metadata?: Record<string, string | number | boolean>
-}
-
-export type BriefingRecommendation = {
-  priority: number
-  title: string
-  reasoning: string
-  estimated_impact: string
-  action_url?: string
-}
-
-export type MorningBriefing = {
-  summary: string
-  critical_alerts: BriefingAlert[]
-  today_outlook: {
-    loads_scheduled: number
-    loads_in_transit: number
-    drivers_available: number
-    drivers_on_duty: number
-    expected_revenue_today: number
-    notable_events: string[]
-  }
-  financial_highlights: {
-    unpaid_invoices_count: number
-    unpaid_invoices_total: number
-    invoices_due_this_week: number
-    overdue_invoices_count: number
-    expected_revenue_this_week: number
-  }
-  compliance_warnings: BriefingAlert[]
-  recommendations: BriefingRecommendation[]
-}
+export type { BriefingSuggestedTool, BriefingAlert, BriefingRecommendation, MorningBriefing } from "@/lib/ai/briefing-types"
 
 const FULL_CONTEXT_KEYS = [
   "fleet",
@@ -105,7 +76,17 @@ export async function companyHasOperationalData(companyId: string): Promise<bool
   return lc > 0 || dc > 0 || tc > 0
 }
 
-function buildBriefingSystemPrompt(briefingDate: string): string {
+function buildBriefingSystemPrompt(briefingDate: string, includeActionableTools: boolean): string {
+  const actionableSection = includeActionableTools
+    ? `
+
+${buildBriefingToolCatalogSection()}
+
+For each recommendations[] and critical_alerts[] entry, include optional:
+"suggested_tool": { "tool_name": "<exact registry name>", "tool_input": { ... } } | null
+Set suggested_tool to null unless a specific tool cleanly matches with inputs grounded in Entity references or location text from context.`
+    : ""
+
   return `You are TruckMates AI generating a morning briefing for a trucking company owner or dispatcher. The operational calendar date is ${briefingDate}.
 
 Your job: produce a concise, ACTIONABLE briefing that surfaces ONLY what matters. Do not pad with generic content.
@@ -121,7 +102,7 @@ Rules:
 Output ONLY valid JSON (no markdown fences, no commentary) with EXACTLY these snake_case top-level keys:
 {
   "summary": "<2–3 sentence executive summary>",
-  "critical_alerts": [ { "severity", "category", "title", "description", optional "action_url", optional "metadata" } ],
+  "critical_alerts": [ { "severity", "category", "title", "description", optional "action_url", optional "metadata", optional "suggested_tool" } ],
   "today_outlook": {
     "loads_scheduled": number,
     "loads_in_transit": number,
@@ -138,8 +119,8 @@ Output ONLY valid JSON (no markdown fences, no commentary) with EXACTLY these sn
     "expected_revenue_this_week": number
   },
   "compliance_warnings": [ same shape as critical_alerts ],
-  "recommendations": [ { "priority": number, "title", "reasoning", "estimated_impact", optional "action_url" } ]
-}`
+  "recommendations": [ { "priority": number, "title", "reasoning", "estimated_impact", optional "action_url", optional "suggested_tool" } ]
+}${actionableSection}`
 }
 
 function isBriefingSeverity(v: unknown): v is BriefingAlert["severity"] {
@@ -168,7 +149,7 @@ function parseAlert(raw: unknown): BriefingAlert | null {
     }
     if (Object.keys(entries).length > 0) metadata = entries
   }
-  return { severity, category, title, description, action_url, metadata }
+  return { severity, category, title, description, action_url, metadata, suggested_tool: parseBriefingSuggestedTool(o.suggested_tool) }
 }
 
 function parseAlerts(raw: unknown): BriefingAlert[] {
@@ -246,7 +227,14 @@ function parseRecommendations(raw: unknown): BriefingRecommendation[] {
     if (!title || !reasoning || !estimated_impact) continue
     const action_url =
       typeof o.action_url === "string" && o.action_url.trim() ? String(o.action_url).trim() : undefined
-    out.push({ priority, title, reasoning, estimated_impact, action_url })
+    out.push({
+      priority,
+      title,
+      reasoning,
+      estimated_impact,
+      action_url,
+      suggested_tool: parseBriefingSuggestedTool(o.suggested_tool),
+    })
   }
   return out.sort((a, b) => a.priority - b.priority)
 }
@@ -483,13 +471,21 @@ export async function generateBriefingForCompany(params: {
   contextUsed: string[]
   model: string | null
   quotaWarning?: boolean
+  suggestedToolStats?: {
+    validated: number
+    discarded: number
+    nullCount: number
+    rawNonNull: number
+  }
 }> {
   const started = Date.now()
   const usageFeature = params.usageFeature ?? "ai_morning_briefing_cron"
 
-  const [{ text: cacheContext, contextUsed }, eventSummary] = await Promise.all([
+  const includeActionable = isAiBriefingActionableRecommendationsEnabled()
+  const [{ text: cacheContext, contextUsed }, eventSummary, entityCtx] = await Promise.all([
     gatherFullContext(params.companyId),
     buildDailyEventSummary(params.companyId),
+    includeActionable ? gatherBriefingEntityContext(params.companyId) : Promise.resolve(null),
   ])
   const userBlock = [
     `Company briefing date: ${params.briefingDate}`,
@@ -497,19 +493,26 @@ export async function generateBriefingForCompany(params: {
     "What actually happened in the last 24 hours (real events — base the summary and notable_events on these):",
     eventSummary || "No 24-hour event data was available for this company.",
     "",
+    ...(entityCtx
+      ? ["Entity references for suggested_tool (use exact UUIDs only when recommending id-based tools):", entityCtx.referenceBlock, ""]
+      : []),
     "Operational context (ground truth — do not invent facts beyond reasonable inference):",
     cacheContext,
   ].join("\n")
 
-  const res = await callClaude<Record<string, unknown>>(buildBriefingSystemPrompt(params.briefingDate), userBlock, {
-    expectJson: true,
-    model: "sonnet",
-    maxTokens: 4096,
-    companyId: params.companyId,
-    feature: usageFeature,
-    cacheSystemPrompt: true,
-    cacheContext,
-  })
+  const res = await callClaude<Record<string, unknown>>(
+    buildBriefingSystemPrompt(params.briefingDate, includeActionable),
+    userBlock,
+    {
+      expectJson: true,
+      model: "sonnet",
+      maxTokens: 4096,
+      companyId: params.companyId,
+      feature: usageFeature,
+      cacheSystemPrompt: true,
+      cacheContext,
+    },
+  )
 
   const durationMs = Date.now() - started
   const tokensUsed = typeof res.tokensUsed === "number" ? res.tokensUsed : 0
@@ -538,6 +541,21 @@ export async function generateBriefingForCompany(params: {
       durationMs,
       contextUsed,
       model: modelName,
+    }
+  }
+
+  if (includeActionable && entityCtx) {
+    const suggestedToolStats = sanitizeBriefingSuggestedTools(parsed, entityCtx.allowlist)
+    return {
+      data: parsed,
+      error: null,
+      tokensUsed,
+      costUsd: 0,
+      durationMs,
+      contextUsed,
+      model: modelName,
+      quotaWarning: res.quotaWarning,
+      suggestedToolStats,
     }
   }
 

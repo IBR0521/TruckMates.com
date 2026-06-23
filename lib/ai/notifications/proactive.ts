@@ -1,5 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { hasFeatureAccess, normalizePlanTier, type PlanTier } from "@/lib/plan-limits"
+import { computeOnTimeDeliveryByCustomer } from "@/lib/analytics/on-time-delivery"
+import { getToolByName } from "@/lib/ai/tools/registry"
+import type { AiToolContext } from "@/lib/ai/tools/types"
 
 export type ProactiveAlert = {
   alert_type: string
@@ -10,6 +13,13 @@ export type ProactiveAlert = {
   details: Record<string, unknown>
   affected_resource_type: string | null
   affected_resource_id: string | null
+  recommendation?:
+    | {
+        tool_name: string
+        tool_input: Record<string, unknown>
+        summary: string
+      }
+    | null
 }
 
 function parseCoord(value: unknown): { lat: number; lng: number } | null {
@@ -33,6 +43,29 @@ export function haversineMiles(a: { lat: number; lng: number }, b: { lat: number
     Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2)
   const c = 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
   return R * c
+}
+
+async function runAnalysisTool(params: {
+  toolName: "find_available_drivers_near_location" | "get_load_profitability_analysis"
+  toolInput: Record<string, unknown>
+  companyId: string
+}): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
+  const tool = getToolByName(params.toolName)
+  if (!tool) return { ok: false, error: "Tool not found." }
+
+  const ctx: AiToolContext = {
+    companyId: params.companyId,
+    userId: "00000000-0000-0000-0000-000000000000",
+    userRole: "operations_manager",
+  }
+
+  try {
+    const res = await tool.execute(params.toolInput, ctx)
+    if (!res.ok) return { ok: false, error: res.error }
+    return { ok: true, data: res.data }
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : "Analysis tool failed." }
+  }
 }
 
 export async function detectLateDeliveryRisk(companyId: string): Promise<ProactiveAlert[]> {
@@ -96,6 +129,7 @@ export async function detectLateDeliveryRisk(companyId: string): Promise<Proacti
         },
         affected_resource_type: "load",
         affected_resource_id: row.id,
+        recommendation: null,
       })
     }
   }
@@ -149,15 +183,26 @@ export async function detectProfitAtRisk(companyId: string): Promise<ProactiveAl
 
     if (sum / negotiated >= 0.8) {
       const margin = negotiated - sum
+      const profitability = await runAnalysisTool({
+        toolName: "get_load_profitability_analysis",
+        toolInput: { load_id: row.id },
+        companyId,
+      })
       out.push({
         alert_type: "profit_at_risk",
         alert_key: `load_${row.id}`,
         priority: margin <= 0 ? "critical" : "high",
         title: "Profit margin thin on active load",
         body: `Recorded expenses (~$${sum.toFixed(0)}) are about ${Math.round((sum / negotiated) * 100)}% of the negotiated rate on load ${row.shipment_number || row.id}; about $${margin.toFixed(0)} margin remains.`,
-        details: { load_id: row.id, expenses: sum, rate: negotiated },
+        details: {
+          load_id: row.id,
+          expenses: sum,
+          rate: negotiated,
+          profitability_analysis: profitability.ok ? profitability.data : { error: profitability.error },
+        },
         affected_resource_type: "load",
         affected_resource_id: row.id,
+        recommendation: null,
       })
     }
   }
@@ -205,6 +250,7 @@ export async function detectCapacityGap(companyId: string): Promise<ProactiveAle
         details: { date: day, scheduled_loads: n, capacity_slots: cap },
         affected_resource_type: null,
         affected_resource_id: null,
+        recommendation: null,
       })
     }
   }
@@ -234,6 +280,7 @@ export async function detectStaleQuotes(companyId: string): Promise<ProactiveAle
     details: { marketplace_id: r.id },
     affected_resource_type: "marketplace_listing",
     affected_resource_id: r.id,
+    recommendation: null,
   }))
 }
 
@@ -264,6 +311,41 @@ export async function detectIdleAssets(companyId: string): Promise<ProactiveAler
   for (const t of trucks as Array<{ id: string; truck_number?: string | null }>) {
     if (busy.has(t.id)) continue
     const label = t.truck_number || t.id
+
+    // Recommendation (only when strong): a load is already attached to this truck but missing a driver.
+    let recommendation: ProactiveAlert["recommendation"] = null
+    const { data: candidateLoad } = await admin
+      .from("loads")
+      .select("id, shipment_number, origin")
+      .eq("company_id", companyId)
+      .eq("truck_id", t.id)
+      .is("driver_id", null)
+      .in("status", ["pending", "confirmed", "scheduled"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const load = candidateLoad as { id?: string; shipment_number?: string | null; origin?: string | null } | null
+    if (load?.id && load.origin) {
+      const driversRes = await runAnalysisTool({
+        toolName: "find_available_drivers_near_location",
+        toolInput: { pickup_location: load.origin },
+        companyId,
+      })
+      const driversObj = (driversRes.ok ? driversRes.data : null) as
+        | { drivers?: Array<{ driver_id?: string; name?: string | null }> }
+        | null
+      const firstDriverId = String(driversObj?.drivers?.[0]?.driver_id || "")
+      const firstDriverName = String(driversObj?.drivers?.[0]?.name || "").trim()
+      if (firstDriverId) {
+        recommendation = {
+          tool_name: "assign_driver_to_load",
+          tool_input: { load_id: load.id, driver_id: firstDriverId },
+          summary: `Assign ${firstDriverName || "an available driver"} to load ${load.shipment_number || load.id}.`,
+        }
+      }
+    }
+
     out.push({
       alert_type: "idle_truck",
       alert_key: `truck_${t.id}`,
@@ -273,6 +355,7 @@ export async function detectIdleAssets(companyId: string): Promise<ProactiveAler
       details: { truck_id: t.id },
       affected_resource_type: "truck",
       affected_resource_id: t.id,
+      recommendation,
     })
   }
   return out
@@ -314,6 +397,7 @@ export async function detectCoachingFollowUps(companyId: string): Promise<Proact
       details: { coaching_session_id: s.id, driver_id: s.driver_id, follow_up_date: today },
       affected_resource_type: "driver",
       affected_resource_id: s.driver_id,
+      recommendation: null,
     }
   })
 }
@@ -356,6 +440,69 @@ export async function detectComplianceTimebomb(companyId: string): Promise<Proac
       details: { driver_id: d.id, license_expiry: d.license_expiry },
       affected_resource_type: "driver",
       affected_resource_id: d.id,
+      recommendation: null,
+    })
+  }
+  return out
+}
+
+/** Minimum delivered loads in window before OTD decline is meaningful. */
+const OTD_DECLINE_MIN_LOADS = 5
+/** On-time % below this triggers an alert (same-day delivery definition as reports). */
+const OTD_DECLINE_THRESHOLD_PCT = 80
+/** Average days late per late load at or above this also triggers when enough late deliveries exist. */
+const OTD_DECLINE_AVG_DAYS_LATE = 1
+const OTD_DECLINE_MIN_LATE_LOADS = 3
+const OTD_LOOKBACK_DAYS = 90
+/**
+ * After resolve, suppress re-firing the same customer alert_key for this many days. The 90-day
+ * rolling window can cross 80% from one new late delivery or old data aging out; 14 days (~two
+ * weekly cron cycles) prevents threshold flip-flop without hiding sustained declines.
+ */
+export const OTD_DECLINE_REFIRE_COOLDOWN_DAYS = 14
+
+export async function detectCustomerOtdDecline(companyId: string): Promise<ProactiveAlert[]> {
+  const admin = createAdminClient()
+  const end = new Date().toISOString().slice(0, 10)
+  const start = new Date(Date.now() - OTD_LOOKBACK_DAYS * 86400000).toISOString().slice(0, 10)
+
+  const { data, error } = await computeOnTimeDeliveryByCustomer(admin, companyId, {
+    start_date: start,
+    end_date: `${end}T23:59:59.999Z`,
+  })
+  if (error || !data?.customers.length) return []
+
+  const out: ProactiveAlert[] = []
+  for (const customer of data.customers) {
+    if (customer.total_loads < OTD_DECLINE_MIN_LOADS) continue
+
+    const lowOnTime = customer.on_time_percentage < OTD_DECLINE_THRESHOLD_PCT
+    const chronicLateness =
+      customer.late_loads >= OTD_DECLINE_MIN_LATE_LOADS &&
+      customer.average_days_late >= OTD_DECLINE_AVG_DAYS_LATE
+
+    if (!lowOnTime && !chronicLateness) continue
+
+    out.push({
+      alert_type: "customer_otd_decline",
+      alert_key: `customer_${customer.customer_id}`,
+      priority: customer.on_time_percentage < 70 ? "high" : "medium",
+      title: `On-time delivery slipping: ${customer.customer_name}`,
+      body: lowOnTime
+        ? `${customer.customer_name} was on-time on ${customer.on_time_percentage}% of ${customer.total_loads} deliveries in the last ${OTD_LOOKBACK_DAYS} days (threshold ${OTD_DECLINE_THRESHOLD_PCT}%).`
+        : `${customer.customer_name} averages ${customer.average_days_late} days late across ${customer.late_loads} late deliveries in the last ${OTD_LOOKBACK_DAYS} days.`,
+      details: {
+        customer_id: customer.customer_id,
+        customer_name: customer.customer_name,
+        window_days: OTD_LOOKBACK_DAYS,
+        total_loads: customer.total_loads,
+        on_time_percentage: customer.on_time_percentage,
+        late_loads: customer.late_loads,
+        average_days_late: customer.average_days_late,
+      },
+      affected_resource_type: "customer",
+      affected_resource_id: customer.customer_id,
+      recommendation: null,
     })
   }
   return out
@@ -376,6 +523,7 @@ export async function generateProactiveAlerts(params: { companyId: string }): Pr
       detectIdleAssets(params.companyId),
       detectComplianceTimebomb(params.companyId),
       detectCoachingFollowUps(params.companyId),
+      detectCustomerOtdDecline(params.companyId),
     ])
     const merged = chunks.flat()
     return { data: merged, error: null, tokensUsed: 0, costUsd: 0 }

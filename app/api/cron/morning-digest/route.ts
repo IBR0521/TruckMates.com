@@ -2,54 +2,16 @@ import { NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { dispatchMorningDigests } from "@/app/actions/notifications"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { runAgentEvaluation } from "@/lib/ai/agent/loop"
-
-type AmountRow = { amount: number | string | null }
-type SettlementRow = { net_pay: number | string | null }
+import { runCashFlowAlertBatch } from "@/lib/ai/agent/cash-flow-processor"
 
 async function triggerCashFlowEvaluations() {
   try {
     const admin = createAdminClient()
-    const { data: companies } = await admin.from("companies").select("id").limit(2000)
-    for (const company of companies || []) {
-      const companyId = String(company.id || "")
-      if (!companyId) continue
-
-      const [arRes, settlementsRes] = await Promise.all([
-        admin
-          .from("invoices")
-          .select("amount")
-          .eq("company_id", companyId)
-          .not("status", "in", '("paid","cancelled","void")')
-          .limit(10000),
-        admin
-          .from("settlements")
-          .select("net_pay")
-          .eq("company_id", companyId)
-          .in("status", ["pending", "approved"])
-          .limit(10000),
-      ])
-
-      const totalArOutstanding = ((arRes.data || []) as AmountRow[]).reduce((sum: number, invoice) => {
-        return sum + Number(invoice.amount || 0)
-      }, 0)
-      const upcomingSettlementsTotal = ((settlementsRes.data || []) as SettlementRow[]).reduce((sum: number, settlement) => {
-        return sum + Number(settlement.net_pay || 0)
-      }, 0)
-      const configuredThreshold = 0
-      const projectedCashPosition14Days = totalArOutstanding - upcomingSettlementsTotal
-
-      runAgentEvaluation({
-        companyId,
-        trigger: "cash_flow_alert",
-        triggerData: {
-          projectedCashPosition14Days,
-          totalArOutstanding,
-          upcomingSettlementsTotal,
-          configuredThreshold,
-        },
-        contextTypes: ["financial"],
-      }).catch((err) => console.error("[Agent]", err))
+    const summary = await runCashFlowAlertBatch(admin)
+    if (summary.expiredPendingApprovals > 0) {
+      console.info(
+        `[cash_flow_alert] expired ${summary.expiredPendingApprovals} stale pending approval(s) from legacy AI path`,
+      )
     }
   } catch (err) {
     console.error("[Agent]", err)

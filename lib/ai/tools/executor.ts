@@ -122,6 +122,8 @@ export async function executeToolForChat(params: {
   userRole: AppRole
   companyTier: PlanTier
   skipConfirmation?: boolean
+  /** When true, always stage pending_confirmation (overrides registry + autonomous mode). */
+  forceConfirmation?: boolean
   destructiveSlotsRemaining: number
 }): Promise<{
   status: "pending_confirmation" | "executed" | "auto_executed" | "failed" | "blocked"
@@ -262,7 +264,10 @@ export async function executeToolForChat(params: {
     }
   }
 
-  const needsConfirmation = await resolveToolConfirmationRequired(tool, validated.value, params.companyId, companyGlobalMode)
+  let needsConfirmation = await resolveToolConfirmationRequired(tool, validated.value, params.companyId, companyGlobalMode)
+  if (params.forceConfirmation) {
+    needsConfirmation = true
+  }
 
   if (needsConfirmation && params.skipConfirmation) {
     const id = await insertAuditRow({

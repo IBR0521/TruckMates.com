@@ -1,5 +1,5 @@
 import type { AiModel, AiResponse } from "@/lib/ai/types"
-import { calculateCallCost, logAiUsage } from "@/lib/ai/usage"
+import { calculateCallCost, logAiFailure, logAiUsage } from "@/lib/ai/usage"
 import { checkMonthlyUsage } from "@/lib/plan-enforcement"
 
 type CallClaudeOptions = {
@@ -159,8 +159,16 @@ export async function callClaude<T = string>(
   userPrompt: string,
   options: CallClaudeOptions = {}
 ): Promise<AiResponse<T>> {
+  const startedAt = Date.now()
   const apiKey = String(process.env.ANTHROPIC_API_KEY || "").trim()
   if (!apiKey) {
+    void logAiFailure({
+      companyId: options.companyId ?? null,
+      feature: String(options.feature || "unknown"),
+      model: MODEL_MAP[options.model || "sonnet"],
+      error: "AI unavailable",
+      durationMs: 0,
+    })
     return { data: null, error: "AI unavailable" }
   }
 
@@ -168,6 +176,13 @@ export async function callClaude<T = string>(
   if (options.companyId) {
     const aiUsage = await checkMonthlyUsage({ companyId: options.companyId, usageType: "ai_calls" })
     if (aiUsage.hardCap) {
+      void logAiFailure({
+        companyId: options.companyId,
+        feature: String(options.feature || "unknown"),
+        model: MODEL_MAP[options.model || "sonnet"],
+        error: "AI quota exceeded for this month. Upgrade to continue.",
+        durationMs: Date.now() - startedAt,
+      })
       return {
         data: null,
         error: "AI quota exceeded for this month. Upgrade to continue.",
@@ -176,7 +191,6 @@ export async function callClaude<T = string>(
     quotaWarning = aiUsage.warningThreshold
   }
 
-  const startedAt = Date.now()
   const routedModel = MODEL_MAP[options.model || "sonnet"]
   const shouldCacheSystemPrompt = options.cacheSystemPrompt !== false
   const cacheContext = String(options.cacheContext || "").trim()
@@ -238,6 +252,14 @@ export async function callClaude<T = string>(
         payload.error?.message ||
         `Anthropic request failed (${response.status})`
 
+      void logAiFailure({
+        companyId,
+        feature,
+        model: routedModel,
+        error: errorMessage,
+        durationMs: Date.now() - startedAt,
+      })
+
       return { data: null, error: errorMessage, quotaWarning }
     }
 
@@ -287,6 +309,14 @@ export async function callClaude<T = string>(
     if (options.expectJson) {
       const parsed = extractJson(text)
       if (!parsed) {
+        void logAiFailure({
+          companyId,
+          feature,
+          model: payload.model || routedModel,
+          error: "Failed to parse JSON response",
+          durationMs: Date.now() - startedAt,
+        })
+
         return {
           data: null,
           error: "Failed to parse JSON response",
@@ -313,7 +343,15 @@ export async function callClaude<T = string>(
       quotaWarning,
     }
   } catch (error: unknown) {
-    return { data: null, error: toErrorMessage(error) }
+    const errorMessage = toErrorMessage(error)
+    void logAiFailure({
+      companyId,
+      feature,
+      model: routedModel,
+      error: errorMessage,
+      durationMs: Date.now() - startedAt,
+    })
+    return { data: null, error: errorMessage }
   }
 }
 

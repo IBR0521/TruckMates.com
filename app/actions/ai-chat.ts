@@ -866,6 +866,113 @@ export async function confirmToolExecution(params: {
   }
 }
 
+export async function handleProactiveRecommendation(notificationId: string): Promise<{ data: { ok: true } | null; error: string | null }> {
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId || !ctx.user) {
+    return { data: null, error: ctx.error || "Not authenticated" }
+  }
+
+  const admin = createAdminClient()
+  const { data: notif, error: nErr } = await admin
+    .from("notifications")
+    .select("id, user_id, company_id, metadata, read")
+    .eq("id", notificationId)
+    .eq("company_id", ctx.companyId)
+    .maybeSingle()
+
+  if (nErr || !notif) return { data: null, error: safeDbError(nErr) || "Notification not found." }
+  const row = notif as { id: string; user_id: string; company_id: string; metadata: Record<string, unknown> | null }
+  if (row.user_id !== ctx.userId) return { data: null, error: "Not authorized." }
+
+  const meta = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? row.metadata : {}
+  const auditId = typeof meta.recommended_action_audit_id === "string" ? meta.recommended_action_audit_id : ""
+  if (!auditId) return { data: null, error: "Recommended action not found." }
+
+  const { data: auditRow, error: aErr } = await admin
+    .from("ai_action_audit")
+    .select("id, tool_name, tool_input, status")
+    .eq("id", auditId)
+    .eq("company_id", ctx.companyId)
+    .eq("user_id", ctx.userId)
+    .maybeSingle()
+  if (aErr || !auditRow) return { data: null, error: safeDbError(aErr) || "Audit row not found." }
+
+  const audit = auditRow as { tool_name: string; tool_input: Record<string, unknown> | null; status: string }
+  const userRole = mapLegacyRole(ctx.user.role) as AppRole
+
+  const exec = await confirmTool({
+    auditId,
+    companyId: ctx.companyId,
+    userId: ctx.userId,
+    userRole,
+  })
+  if (!exec.ok) return { data: null, error: exec.error }
+
+  await admin.rpc("increment_ai_action_preference", {
+    p_company_id: ctx.companyId,
+    p_tool_name: audit.tool_name,
+    p_entity_id: extractPreferenceEntityId(audit.tool_input),
+    p_outcome: "approved",
+  })
+
+  await admin.from("notifications").update({ read: true, read_at: new Date().toISOString() }).eq("id", notificationId).eq("company_id", ctx.companyId)
+  return { data: { ok: true }, error: null }
+}
+
+export async function dismissProactiveRecommendation(
+  notificationId: string,
+  reason?: string,
+): Promise<{ data: { ok: true } | null; error: string | null }> {
+  const ctx = await getCachedAuthContext()
+  if (ctx.error || !ctx.companyId || !ctx.userId || !ctx.user) {
+    return { data: null, error: ctx.error || "Not authenticated" }
+  }
+
+  const admin = createAdminClient()
+  const { data: notif, error: nErr } = await admin
+    .from("notifications")
+    .select("id, user_id, company_id, metadata, read")
+    .eq("id", notificationId)
+    .eq("company_id", ctx.companyId)
+    .maybeSingle()
+
+  if (nErr || !notif) return { data: null, error: safeDbError(nErr) || "Notification not found." }
+  const row = notif as { id: string; user_id: string; company_id: string; metadata: Record<string, unknown> | null }
+  if (row.user_id !== ctx.userId) return { data: null, error: "Not authorized." }
+
+  const meta = row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? row.metadata : {}
+  const auditId = typeof meta.recommended_action_audit_id === "string" ? meta.recommended_action_audit_id : ""
+  if (!auditId) return { data: null, error: "Recommended action not found." }
+
+  const { data: auditRow, error: aErr } = await admin
+    .from("ai_action_audit")
+    .select("id, tool_name, tool_input, status")
+    .eq("id", auditId)
+    .eq("company_id", ctx.companyId)
+    .eq("user_id", ctx.userId)
+    .maybeSingle()
+  if (aErr || !auditRow) return { data: null, error: safeDbError(aErr) || "Audit row not found." }
+
+  const audit = auditRow as { tool_name: string; tool_input: Record<string, unknown> | null; status: string }
+
+  const rej = await rejectTool(auditId, {
+    companyId: ctx.companyId,
+    userId: ctx.userId,
+    reason: (reason || "").trim() || "User dismissed.",
+  })
+  if (!rej.ok) return { data: null, error: rej.error }
+
+  await admin.rpc("increment_ai_action_preference", {
+    p_company_id: ctx.companyId,
+    p_tool_name: audit.tool_name,
+    p_entity_id: extractPreferenceEntityId(audit.tool_input),
+    p_outcome: "rejected",
+  })
+
+  await admin.from("notifications").update({ read: true, read_at: new Date().toISOString() }).eq("id", notificationId).eq("company_id", ctx.companyId)
+  return { data: { ok: true }, error: null }
+}
+
 export async function archiveConversation(conversationId: string): Promise<{
   data: { archived: boolean } | null
   error: string | null

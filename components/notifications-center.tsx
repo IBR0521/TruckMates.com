@@ -13,6 +13,7 @@ import { useRealtimeNotifications } from "@/lib/hooks/use-realtime"
 import { groupNotificationRows } from "@/lib/notifications/group-for-display"
 import { effectiveAiPriority } from "@/lib/notifications/smart-ui"
 import { cn } from "@/lib/utils"
+import { ProactiveRecommendationActions } from "@/components/ai/proactive-recommendation-actions"
 
 type NotificationItem = {
   id: string
@@ -32,6 +33,7 @@ type NotificationItem = {
   priority?: string | null
   source?: string | null
   status?: string | null
+  metadata?: Record<string, unknown> | null
 }
 
 const asNotificationItem = (value: unknown): NotificationItem | null => {
@@ -60,6 +62,7 @@ const asNotificationItem = (value: unknown): NotificationItem | null => {
     priority: typeof obj.priority === "string" ? obj.priority : null,
     source: typeof obj.source === "string" ? obj.source : null,
     status: typeof obj.status === "string" ? obj.status : null,
+    metadata: obj.metadata && typeof obj.metadata === "object" && !Array.isArray(obj.metadata) ? (obj.metadata as Record<string, unknown>) : null,
   }
 }
 
@@ -134,6 +137,12 @@ function NotificationRowView({
   markAsRead: (id: string, itemType: "notification" | "alert") => void
 }) {
   const isAlert = n.itemType === "alert" || n.source === "alerts"
+
+  const meta = n.metadata && typeof n.metadata === "object" && !Array.isArray(n.metadata) ? n.metadata : {}
+  const recommendedAuditId = typeof meta.recommended_action_audit_id === "string" ? meta.recommended_action_audit_id : null
+  const recommendedStatus = typeof meta.recommended_action_status === "string" ? meta.recommended_action_status : null
+  const recommendedSummary = typeof meta.recommended_action_summary === "string" ? meta.recommended_action_summary : null
+  const hasRecommendation = Boolean(recommendedAuditId)
 
   const getNotificationIcon = () => {
     if (isAlert) {
@@ -218,6 +227,26 @@ function NotificationRowView({
             )}
           </div>
           {n.message && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{n.message}</p>}
+
+          {hasRecommendation && recommendedStatus === "pending_confirmation" ? (
+            <div className="mt-2">
+              <ProactiveRecommendationActions
+                notificationId={n.id}
+                mode="pending_confirmation"
+                summary={recommendedSummary}
+                onDone={() => markAsRead(n.id, isAlert ? "alert" : "notification")}
+              />
+            </div>
+          ) : hasRecommendation && recommendedStatus === "auto_executed" ? (
+            <div className="mt-2">
+              <ProactiveRecommendationActions notificationId={n.id} mode="auto_executed" summary={recommendedSummary} />
+            </div>
+          ) : hasRecommendation && (recommendedStatus === "failed" || recommendedStatus === "blocked") ? (
+            <div className="mt-2">
+              <ProactiveRecommendationActions notificationId={n.id} mode="action_failed" summary={recommendedSummary} />
+            </div>
+          ) : null}
+
           <p className="mt-1 text-xs text-muted-foreground">{formatNotificationDate(n.created_at)}</p>
         </div>
       </div>

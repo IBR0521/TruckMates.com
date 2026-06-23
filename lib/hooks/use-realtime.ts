@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from "@supabase/supabase-js"
+import { useNotificationsRealtimeSubscription } from "@/lib/hooks/notifications-realtime-subscription"
 import { aiPriorityRank, effectiveAiPriority } from "@/lib/notifications/smart-ui"
 import { toast } from "sonner"
 import { useDashboardShell } from "@/components/dashboard/shell-bootstrap-provider"
@@ -376,33 +377,9 @@ export function useRealtimeNotifications() {
   }, [supabase, refreshUnreadCount, shell.data, shell.loading])
 
   // Realtime for in-app notifications; alerts are refreshed via scheduleRefresh (no realtime publication).
-  useEffect(() => {
-    if (!userId) return
-
-    try {
-      const channel = supabase
-        .channel(`notifications:${userId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "notifications",
-            filter: `user_id=eq.${userId}`,
-          },
-          () => {
-            scheduleRefresh()
-          },
-        )
-        .subscribe()
-
-      return () => {
-        supabase.removeChannel(channel)
-      }
-    } catch (error) {
-      console.log("[NOTIFICATIONS] Real-time not available:", error)
-    }
-  }, [supabase, userId, scheduleRefresh])
+  useNotificationsRealtimeSubscription(userId, () => {
+    scheduleRefresh()
+  })
 
   useEffect(() => {
     return () => {

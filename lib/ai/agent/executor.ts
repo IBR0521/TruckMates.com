@@ -517,6 +517,39 @@ async function executeCashFlowAlert(payload: Record<string, unknown>): Promise<E
   return { success: true, result: "Cash flow alert dispatched", error: null }
 }
 
+/** Tier 1 deterministic dispatch — no AI summary, no pending-approval queue. */
+export async function dispatchDeterministicCashFlowAlert(params: {
+  companyId: string
+  triggerData: Record<string, unknown>
+  reasoning: string
+  level: import("@/lib/ai/types").AutomationLevel
+  tier0Triggers: string[]
+}): Promise<{ success: boolean; error: string | null }> {
+  const payload = { companyId: params.companyId, ...params.triggerData }
+  const execution = await executeCashFlowAlert(payload)
+
+  await logAutomationEvent({
+    companyId: params.companyId,
+    automationType: "cash_flow_alert",
+    level: params.level,
+    triggered: execution.success,
+    confidence: 100,
+    reasoning: params.reasoning,
+    actionTaken: execution.success ? "cash_flow_alert" : null,
+    actionPayload: {
+      triggerData: params.triggerData,
+      tier: "deterministic_tier1",
+      tier0Triggers: params.tier0Triggers,
+      executionResult: execution.result,
+      executionError: execution.error,
+    },
+    approved: true,
+    reversedAt: null,
+  })
+
+  return { success: execution.success, error: execution.error }
+}
+
 async function executeDocumentExpiryAlert(payload: Record<string, unknown>): Promise<ExecutionResult> {
   const companyId = asString(payload.companyId || payload.company_id)
   if (!companyId) return { success: false, result: "", error: "companyId is required" }

@@ -1,10 +1,10 @@
 "use server"
 
-import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
+import { computeOnTimeDeliveryByCustomer } from "@/lib/analytics/on-time-delivery"
 /**
  * Get on-time delivery analytics by customer
  */
@@ -27,167 +27,13 @@ export async function getOnTimeDeliveryAnalytics(filters?: {
   }
 
   try {
-    // Get delivered loads with customer info
-    let query = supabase
-      .from("loads")
-      .select(`
-        id,
-        shipment_number,
-        estimated_delivery,
-        actual_delivery,
-        load_date,
-        status,
-        customer_id,
-        customers:customer_id(
-          id,
-          name,
-          company_name
-        )
-      `)
-      .eq("company_id", ctx.companyId)
-      .eq("status", "delivered")
-      .not("estimated_delivery", "is", null)
-      .not("actual_delivery", "is", null)
+    const result = await computeOnTimeDeliveryByCustomer(supabase, ctx.companyId, filters)
 
-    if (filters?.customer_id) {
-      query = query.eq("customer_id", filters.customer_id)
-    }
-    if (filters?.start_date) {
-      query = query.gte("actual_delivery", filters.start_date)
-    }
-    if (filters?.end_date) {
-      query = query.lte("actual_delivery", filters.end_date)
+    if (result.error || !result.data) {
+      return { error: result.error || "Failed to get on-time delivery analytics", data: null }
     }
 
-    // FIXED: Add limit to prevent unbounded queries
-    const limit = 10000 // Reasonable limit for analytics
-    query = query.limit(limit)
-
-    const { data: loads, error } = await query
-
-    if (error) {
-      return { error: safeDbError(error) || "Failed to get on-time delivery analytics", data: null }
-    }
-
-    // Aggregate by customer
-    const customerMap = new Map<string, {
-      customer_id: string
-      customer_name: string
-      total_loads: number
-      on_time_loads: number
-      late_loads: number
-      early_loads: number
-      total_days_late: number
-      total_days_early: number
-      average_days_difference: number
-      on_time_percentage: number
-    }>()
-
-    loads?.forEach((load: {
-      customer_id: string | null
-      estimated_delivery: string | null
-      actual_delivery: string | null
-      customers?: { id?: string | null; name?: string | null; company_name?: string | null } | null
-    }) => {
-      if (!load.customer_id || !load.estimated_delivery || !load.actual_delivery) return
-
-      const customer = load.customers
-      if (!customer || !customer.id) return
-
-      const customerId = customer.id
-      const customerName = customer.name || customer.company_name || "Unknown Customer"
-
-      // FIXED: Normalize timezones and use proper on-time window (same day or within delivery window)
-      // Convert to UTC for consistent comparison
-      const estimatedDate = new Date(load.estimated_delivery)
-      const actualDate = new Date(load.actual_delivery)
-      
-      // FIXED: Use same-day definition for on-time (not exact millisecond equality)
-      // A delivery is "on-time" if it's on the same calendar day or within a reasonable window
-      const estimatedDay = new Date(estimatedDate.getFullYear(), estimatedDate.getMonth(), estimatedDate.getDate())
-      const actualDay = new Date(actualDate.getFullYear(), actualDate.getMonth(), actualDate.getDate())
-      
-      // Calculate days difference (positive = late, negative = early)
-      const daysDifference = Math.round(
-        (actualDay.getTime() - estimatedDay.getTime()) / (1000 * 60 * 60 * 24)
-      )
-
-      if (!customerMap.has(customerId)) {
-        customerMap.set(customerId, {
-          customer_id: customerId,
-          customer_name: customerName,
-          total_loads: 0,
-          on_time_loads: 0,
-          late_loads: 0,
-          early_loads: 0,
-          total_days_late: 0,
-          total_days_early: 0,
-          average_days_difference: 0,
-          on_time_percentage: 0,
-        })
-      }
-
-      const customerData = customerMap.get(customerId)!
-      customerData.total_loads += 1
-
-      if (daysDifference === 0) {
-        customerData.on_time_loads += 1
-      } else if (daysDifference > 0) {
-        customerData.late_loads += 1
-        customerData.total_days_late += daysDifference
-      } else {
-        customerData.early_loads += 1
-        customerData.total_days_early += Math.abs(daysDifference)
-      }
-    })
-
-    // Calculate percentages and averages
-    const customerResults = Array.from(customerMap.values()).map((customer) => {
-      const totalDaysDifference = customer.total_days_late - customer.total_days_early
-      const averageDaysDifference =
-        customer.total_loads > 0 ? totalDaysDifference / customer.total_loads : 0
-      const onTimePercentage =
-        customer.total_loads > 0
-          ? Math.round((customer.on_time_loads / customer.total_loads) * 100 * 10) / 10
-          : 0
-
-      return {
-        ...customer,
-        average_days_difference: Math.round(averageDaysDifference * 10) / 10,
-        on_time_percentage: onTimePercentage,
-        average_days_late: customer.late_loads > 0
-          ? Math.round((customer.total_days_late / customer.late_loads) * 10) / 10
-          : 0,
-        average_days_early: customer.early_loads > 0
-          ? Math.round((customer.total_days_early / customer.early_loads) * 10) / 10
-          : 0,
-      }
-    })
-
-    // Sort by on-time percentage (descending)
-    customerResults.sort((a, b) => b.on_time_percentage - a.on_time_percentage)
-
-    // Calculate overall summary
-    const totalLoads = customerResults.reduce((sum, c) => sum + c.total_loads, 0)
-    const totalOnTime = customerResults.reduce((sum, c) => sum + c.on_time_loads, 0)
-    const totalLate = customerResults.reduce((sum, c) => sum + c.late_loads, 0)
-    const totalEarly = customerResults.reduce((sum, c) => sum + c.early_loads, 0)
-    const overallOnTimePercentage =
-      totalLoads > 0 ? Math.round((totalOnTime / totalLoads) * 100 * 10) / 10 : 0
-
-    return {
-      data: {
-        summary: {
-          total_loads: totalLoads,
-          on_time_loads: totalOnTime,
-          late_loads: totalLate,
-          early_loads: totalEarly,
-          on_time_percentage: overallOnTimePercentage,
-        },
-        customers: customerResults,
-      },
-      error: null,
-    }
+    return { data: result.data, error: null }
   } catch (error: unknown) {
     return { error: errorMessage(error, "Failed to get on-time delivery analytics"), data: null }
   }

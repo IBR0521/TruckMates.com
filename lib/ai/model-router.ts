@@ -25,3 +25,9 @@ const TASK_MODEL: Record<AiTask, AiModel> = {
 export function chooseModel(task: AiTask): AiModel {
   return TASK_MODEL[task]
 }
+
+/** Agent loop model routing; cash_flow_alert uses haiku after deterministic pre-check escalation. */
+export function chooseAgentDecisionModel(trigger: string): AiModel {
+  if (trigger === "cash_flow_alert") return "haiku"
+  return TASK_MODEL.agent_decision
+}

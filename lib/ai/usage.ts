@@ -64,3 +64,37 @@ export async function logAiUsage(params: {
     console.error("[AI Usage]", error)
   }
 }
+
+/** Persist failed AI calls so outages are visible via DB query, not only Sentry. */
+export async function logAiFailure(params: {
+  companyId: string | null
+  feature: string
+  model: string
+  error: string
+  durationMs: number
+}): Promise<void> {
+  try {
+    const admin = createAdminClient()
+    const { error } = await admin.from("ai_usage_logs").insert({
+      company_id: params.companyId,
+      feature: params.feature,
+      model: params.model,
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_read_tokens: 0,
+      cache_write_tokens: 0,
+      cost_usd: 0,
+      duration_ms: Math.max(0, Math.round(params.durationMs)),
+      metadata: {
+        success: false,
+        error: params.error.slice(0, 2000),
+      },
+    })
+
+    if (error) {
+      console.error("[AI Usage]", error.message || "Failed to write ai failure log")
+    }
+  } catch (error) {
+    console.error("[AI Usage]", error)
+  }
+}

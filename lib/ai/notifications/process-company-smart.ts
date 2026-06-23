@@ -1,7 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { hasFeatureAccess, normalizePlanTier, type PlanTier } from "@/lib/plan-limits"
 import { scoreNotificationBatch, type NotificationToScore } from "@/lib/ai/notifications/scorer"
-import { generateProactiveAlerts, type ProactiveAlert } from "@/lib/ai/notifications/proactive"
+import { generateProactiveAlerts, type ProactiveAlert, OTD_DECLINE_REFIRE_COOLDOWN_DAYS } from "@/lib/ai/notifications/proactive"
+import { computeOnTimeDeliveryByCustomer } from "@/lib/analytics/on-time-delivery"
+import { executeToolForChat } from "@/lib/ai/tools/executor"
+import { proactiveRecommendationForceConfirmation } from "@/lib/ai/briefing-staging"
+import type { AppRole } from "@/lib/ai/tools/types"
 
 function tierFromRow(raw: string | null | undefined): PlanTier {
   return normalizePlanTier(raw ?? undefined)
@@ -89,7 +93,9 @@ export async function insertProactiveIfNew(
   admin: ReturnType<typeof createAdminClient>,
   companyId: string,
   alert: ProactiveAlert,
+  ctx: { userId: string; userRole: AppRole; companyTier: PlanTier },
 ): Promise<"created" | "skipped" | "failed"> {
+  // 1) Dedup check (must happen before any staging / recipient logic).
   const { data: open } = await admin
     .from("ai_proactive_alerts")
     .select("id")
@@ -100,19 +106,104 @@ export async function insertProactiveIfNew(
     .maybeSingle()
   if (open?.id) return "skipped"
 
+  // Rolling-window OTD metrics can re-cross threshold immediately after resolve; enforce cooldown.
+  if (alert.alert_type === "customer_otd_decline") {
+    const cutoff = new Date(Date.now() - OTD_DECLINE_REFIRE_COOLDOWN_DAYS * 86400000).toISOString()
+    const { data: recentResolved } = await admin
+      .from("ai_proactive_alerts")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("alert_type", alert.alert_type)
+      .eq("alert_key", alert.alert_key)
+      .eq("resolved", true)
+      .not("resolved_at", "is", null)
+      .gte("resolved_at", cutoff)
+      .limit(1)
+      .maybeSingle()
+    if (recentResolved?.id) return "skipped"
+  }
+
+  // 2) Recipient lookup (must succeed before any tool staging).
   const userId = await pickRecipientUserId(admin, companyId)
   if (!userId) return "failed"
 
+  let recommendedAuditId: string | null = null
+  let recommendedSummary: string | null = null
+  let recommendedToolName: string | null = null
+  let recommendedStatus: "pending_confirmation" | "auto_executed" | "executed" | "failed" | "blocked" | null = null
+
+  // 3) Optional staging: never block notification creation if it fails.
+  if (alert.recommendation && alert.recommendation.tool_name && alert.recommendation.tool_input) {
+    try {
+      const toolUseId = crypto.randomUUID()
+      const conversationId = `proactive:${companyId}:${alert.alert_type}:${alert.alert_key}`
+      const forceConfirmation = proactiveRecommendationForceConfirmation(
+        alert.alert_type,
+        alert.recommendation.tool_name,
+      )
+
+      const exec = await executeToolForChat({
+        toolName: alert.recommendation.tool_name,
+        toolInput: alert.recommendation.tool_input,
+        toolUseId,
+        conversationId,
+        messageId: null,
+        companyId,
+        userId,
+        userRole: ctx.userRole,
+        companyTier: ctx.companyTier,
+        forceConfirmation,
+        destructiveSlotsRemaining: 3,
+      })
+
+      if (exec.auditId) {
+        recommendedAuditId = exec.auditId
+        recommendedSummary = alert.recommendation.summary
+        recommendedToolName = alert.recommendation.tool_name
+        recommendedStatus = exec.status
+      }
+    } catch (e: unknown) {
+      // Use lightweight server-side logging; staging failure must not drop the underlying alert.
+      console.error("[ai_proactive] Recommendation staging failed", {
+        companyId,
+        alert_type: alert.alert_type,
+        alert_key: alert.alert_key,
+        tool_name: alert.recommendation.tool_name,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
+  }
+
+  const title =
+    recommendedStatus === "auto_executed"
+      ? `AI already did: ${recommendedSummary || alert.title}`
+      : recommendedStatus === "pending_confirmation"
+        ? `AI recommends: ${recommendedSummary || alert.title}`
+        : alert.title
+
+  // 4) Notification insert last (uses staged audit id when available).
   const { data: notif, error: nErr } = await admin
     .from("notifications")
     .insert({
       user_id: userId,
       company_id: companyId,
       type: "info",
-      title: alert.title,
+      title,
       message: alert.body,
       priority: mapAiPriorityToLegacy(alert.priority),
-      metadata: { ...alert.details, ai_proactive: true, alert_type: alert.alert_type },
+      metadata: {
+        ...alert.details,
+        ai_proactive: true,
+        alert_type: alert.alert_type,
+        ...(recommendedAuditId
+          ? {
+              recommended_action_audit_id: recommendedAuditId,
+              recommended_action_summary: recommendedSummary,
+              recommended_action_tool_name: recommendedToolName,
+              recommended_action_status: recommendedStatus,
+            }
+          : {}),
+      },
       read: false,
       source: "ai_proactive",
       ai_priority: alert.priority,
@@ -126,18 +217,36 @@ export async function insertProactiveIfNew(
   if (nErr || !notif) return "failed"
   const notificationId = String((notif as { id: string }).id)
 
-  const { error: aErr } = await admin.from("ai_proactive_alerts").insert({
+  const alertRow = {
     company_id: companyId,
     alert_type: alert.alert_type,
     alert_key: alert.alert_key,
     notification_id: notificationId,
     details: alert.details,
     resolved: false,
-  })
+  }
+
+  let { error: aErr } = await admin.from("ai_proactive_alerts").insert(alertRow)
+  if (aErr) {
+    ;({ error: aErr } = await admin.from("ai_proactive_alerts").insert(alertRow))
+  }
 
   if (aErr) {
-    await admin.from("notifications").delete().eq("id", notificationId)
-    return "failed"
+    // Keep the notification when staging produced an audit row — the alert insert failed
+    // but the audit trail (and any auto-executed side effects) must remain reachable.
+    if (!recommendedAuditId) {
+      await admin.from("notifications").delete().eq("id", notificationId)
+      return "failed"
+    }
+    console.error("[ai_proactive] ai_proactive_alerts insert failed after retry; notification kept without dedup row", {
+      companyId,
+      alert_type: alert.alert_type,
+      alert_key: alert.alert_key,
+      notification_id: notificationId,
+      recommended_audit_id: recommendedAuditId,
+      error: aErr.message,
+    })
+    return "created"
   }
 
   return "created"
@@ -232,6 +341,27 @@ export async function resolveProactiveAlertsForCompany(
           .eq("id", sid)
           .maybeSingle()
         if ((sess as { follow_up_completed?: boolean } | null)?.follow_up_completed) shouldResolve = true
+      }
+    }
+
+    if (row.alert_type === "customer_otd_decline") {
+      const customerId = typeof details.customer_id === "string" ? details.customer_id : null
+      if (customerId) {
+        const end = new Date().toISOString().slice(0, 10)
+        const start = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)
+        const { data: otd } = await computeOnTimeDeliveryByCustomer(admin, companyId, {
+          start_date: start,
+          end_date: `${end}T23:59:59.999Z`,
+          customer_id: customerId,
+        })
+        const c = otd?.customers[0]
+        if (!c || c.total_loads < 5) {
+          shouldResolve = true
+        } else {
+          const lowOnTime = c.on_time_percentage < 80
+          const chronicLateness = c.late_loads >= 3 && c.average_days_late >= 1
+          if (!lowOnTime && !chronicLateness) shouldResolve = true
+        }
       }
     }
 
@@ -389,9 +519,18 @@ export async function processSmartNotificationsForCompany(companyId: string): Pr
     const proactive = await generateProactiveAlerts({ companyId })
     proactiveError = proactive.error
     if (!proactive.error && proactive.data) {
+      const recipientUserId = await pickRecipientUserId(admin, companyId)
+      if (recipientUserId) {
+        const companyTier = tierFromRow((company as { subscription_tier?: string } | null)?.subscription_tier)
+        const insertCtx: { userId: string; userRole: AppRole; companyTier: PlanTier } = {
+          userId: recipientUserId,
+          userRole: "operations_manager",
+          companyTier,
+        }
       for (const alert of proactive.data) {
-        const ins = await insertProactiveIfNew(admin, companyId, alert)
+        const ins = await insertProactiveIfNew(admin, companyId, alert, insertCtx)
         if (ins === "created") proactive_created += 1
+      }
       }
     }
   }

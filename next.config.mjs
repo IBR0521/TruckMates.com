@@ -112,7 +112,7 @@ const nextConfig = {
           "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
           "font-src 'self' https://fonts.gstatic.com",
           "img-src 'self' data: blob: https:",
-          "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.here.com https://api.paddle.com https://maps.googleapis.com https://api.resend.com https://api.twilio.com https://api.stripe.com",
+          "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.ingest.sentry.io https://*.ingest.us.sentry.io https://api.here.com https://api.paddle.com https://maps.googleapis.com https://api.resend.com https://api.twilio.com https://api.stripe.com",
           "frame-src 'self' https://cdn.paddle.com",
           "worker-src 'self' blob:",
           "base-uri 'self'",
