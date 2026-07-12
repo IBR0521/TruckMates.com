@@ -265,6 +265,11 @@ export function AiAutomationClientPage({ companyId }: { companyId: string }) {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/dashboard/settings/ai-automation/activity">
+              <Button variant="outline" size="sm">
+                Activity
+              </Button>
+            </Link>
             <Link href="/dashboard/settings/ai-automation/pending-approvals">
               <Button variant="outline" size="sm">
                 Pending approvals
