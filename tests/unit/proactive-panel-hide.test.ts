@@ -20,7 +20,7 @@ function insertPayload(aiPriority: string): RealtimePostgresChangesPayload<Recor
       source: "ai_proactive",
     },
     old: {},
-    errors: null,
+    errors: [],
   }
 }
 

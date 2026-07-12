@@ -886,7 +886,7 @@ export async function testAllPlatformFunctions() {
         pushPassed("getELDDevices")
         if (devices.data.length > 0) {
           try {
-            const device = await eldActions.getELDDevice(devices.data[0].id)
+            const device = await eldActions.getELDDevice((devices.data[0] as { id: string }).id)
             pushTested("getELDDevice")
             if (device.data) pushPassed("getELDDevice")
             else pushFailed({ function: "getELDDevice", error: device.error })
@@ -896,7 +896,7 @@ export async function testAllPlatformFunctions() {
 
           // Test ELD logs
           try {
-            const logs = await eldActions.getELDLogs({ eld_device_id: devices.data[0].id })
+            const logs = await eldActions.getELDLogs({ eld_device_id: (devices.data[0] as { id: string }).id })
             pushTested("getELDLogs")
             if (logs.data !== undefined) pushPassed("getELDLogs")
             else pushFailed({ function: "getELDLogs", error: logs.error || "Unknown error" })
@@ -906,7 +906,7 @@ export async function testAllPlatformFunctions() {
 
           // Test ELD events
           try {
-            const events = await eldActions.getELDEvents({ eld_device_id: devices.data[0].id })
+            const events = await eldActions.getELDEvents({ eld_device_id: (devices.data[0] as { id: string }).id })
             pushTested("getELDEvents")
             if (events.data !== undefined) pushPassed("getELDEvents")
             else pushFailed({ function: "getELDEvents", error: events.error || "Unknown error" })
@@ -1017,7 +1017,7 @@ export async function testAllPlatformFunctions() {
       const drivers = await driversActions.getDrivers()
       if (devices.data && devices.data.length > 0 && drivers.data && drivers.data.length > 0) {
         const log = await eldManualActions.createELDLog({
-          eld_device_id: devices.data[0].id,
+          eld_device_id: (devices.data[0] as { id: string }).id,
           driver_id: drivers.data[0].id,
           log_date: new Date().toISOString().split("T")[0],
           log_type: "driving",
@@ -1039,7 +1039,7 @@ export async function testAllPlatformFunctions() {
       const drivers = await driversActions.getDrivers()
       if (devices.data && devices.data.length > 0 && drivers.data && drivers.data.length > 0) {
         const location = await eldManualActions.createELDLocation({
-          eld_device_id: devices.data[0].id,
+          eld_device_id: (devices.data[0] as { id: string }).id,
           driver_id: drivers.data[0].id,
           latitude: 34.0522,
           longitude: -118.2437,
@@ -1061,7 +1061,7 @@ export async function testAllPlatformFunctions() {
       const drivers = await driversActions.getDrivers()
       if (devices.data && devices.data.length > 0 && drivers.data && drivers.data.length > 0) {
         const event = await eldManualActions.createELDEvent({
-          eld_device_id: devices.data[0].id,
+          eld_device_id: (devices.data[0] as { id: string }).id,
           driver_id: drivers.data[0].id,
           event_type: "hos_violation",
           severity: "warning",

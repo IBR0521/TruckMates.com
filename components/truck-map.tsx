@@ -210,7 +210,7 @@ export function TruckMap({
       <div className="relative w-full h-80 bg-secondary/30 rounded-lg border border-border/50 overflow-hidden">
         {roadPreviewUrl ? (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element -- blob URL from proxied Static Maps */}
+            {/* Intentional <img>: blob URL from a proxied Static Maps request, not a static asset for next/image. */}
             <img
               src={roadPreviewUrl}
               alt=""
