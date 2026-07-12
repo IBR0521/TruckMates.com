@@ -139,6 +139,19 @@ export async function resolveInvoiceTaxes(
     return { subtotal: amount, taxAmount: 0, total: amount, taxRate: null, lines, taxInclusive }
   }
 
+  // Tax-inclusive: `amount` already contains tax, so back the pre-tax subtotal out first — otherwise
+  // per-line tax is computed on the gross and subtotal/tax/total don't reconcile (matches the
+  // defaults-branch behavior above).
+  if (taxInclusive) {
+    const totalFixed = applicable
+      .filter((row) => row.tax_type === "fixed")
+      .reduce((sum, row) => sum + (Number(row.rate) || 0), 0)
+    const totalPctRate = applicable
+      .filter((row) => row.tax_type !== "fixed")
+      .reduce((sum, row) => sum + (Number(row.rate) || 0), 0)
+    subtotal = Math.round(((amount - totalFixed) / (1 + totalPctRate / 100)) * 100) / 100
+  }
+
   let taxAmount = 0
   for (const row of applicable) {
     const rate = Number(row.rate) || 0
@@ -153,7 +166,15 @@ export async function resolveInvoiceTaxes(
   }
   taxAmount = Math.round(taxAmount * 100) / 100
   if (taxInclusive) {
-    return { subtotal, taxAmount, total: amount, taxRate: null, lines, taxInclusive: true }
+    // Tax is exactly the amount above the backed-out subtotal, so subtotal + tax == total.
+    return {
+      subtotal,
+      taxAmount: Math.round((amount - subtotal) * 100) / 100,
+      total: amount,
+      taxRate: null,
+      lines,
+      taxInclusive: true,
+    }
   }
   total = Math.round((subtotal + taxAmount) * 100) / 100
   return { subtotal, taxAmount, total, taxRate: null, lines, taxInclusive: false }

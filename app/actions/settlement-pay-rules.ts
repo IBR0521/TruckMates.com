@@ -116,6 +116,7 @@ export async function upsertDriverPayRule(rule: DriverPayRule) {
           .from("driver_pay_rules")
           .update({ is_active: false })
           .eq("id", rule.id)
+          .eq("company_id", ctx.companyId)
       }
 
       // Deactivate other active rules for this driver
@@ -125,6 +126,7 @@ export async function upsertDriverPayRule(rule: DriverPayRule) {
           .update({ is_active: false })
           .eq("driver_id", rule.driver_id)
           .eq("is_active", true)
+          .eq("company_id", ctx.companyId)
       }
 
       // Insert new rule

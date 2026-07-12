@@ -228,6 +228,19 @@ export async function createIFTAReport(formData: {
     const allCodes = new Set<string>([...gpsByCode.keys(), ...Object.keys(tripMilesByState)])
     const perStateSources: Record<string, "gps" | "trip_sheet" | "both"> = {}
 
+    // IFTA fleet average MPG for the quarter = total miles ÷ total tax-paid gallons.
+    // Fall back to a default only when no fuel-purchase data exists (MPG is underivable without gallons).
+    const DEFAULT_FLEET_MPG = 6.5
+    const totalGallonsPurchased = Object.values(fuelByState).reduce((sum, g) => sum + (Number(g) || 0), 0)
+    let totalMilesAllStates = 0
+    for (const code of allCodes) {
+      totalMilesAllStates += (gpsByCode.get(code)?.miles ?? 0) + (tripMilesByState[code] ?? 0)
+    }
+    const fleetMpg =
+      totalGallonsPurchased > 0 && totalMilesAllStates > 0
+        ? totalMilesAllStates / totalGallonsPurchased
+        : DEFAULT_FLEET_MPG
+
     for (const stateCode of allCodes) {
       const gpsM = gpsByCode.get(stateCode)?.miles ?? 0
       const sheetM = tripMilesByState[stateCode] ?? 0
@@ -243,9 +256,13 @@ export async function createIFTAReport(formData: {
       totalMiles += miles
       const stateName = gpsByCode.get(stateCode)?.state_name || stateCode
       const taxRate = taxRates[stateCode] || getFuelTaxRate(stateCode, 0.25)
+      const purchasedGallons = fuelByState[stateCode] ?? 0
+      const taxableGallons = miles / fleetMpg
+      // IFTA net tax: tax on taxable (consumed) gallons minus credit for tax-paid (purchased) gallons.
+      // Negative = net credit for that jurisdiction. Purchased gallons come from fuelByState.
+      const taxDue = (taxableGallons - purchasedGallons) * taxRate
       const fuelGallons =
-        fuelByState[stateCode] !== undefined ? fuelByState[stateCode] : Math.round(miles / 6.5)
-      const taxDue = (miles / 6.5) * taxRate
+        fuelByState[stateCode] !== undefined ? fuelByState[stateCode] : Math.round(taxableGallons)
 
       stateBreakdown.push({
         state: stateName,

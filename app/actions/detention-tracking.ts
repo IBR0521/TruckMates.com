@@ -8,6 +8,7 @@ import { safeDbError } from "@/lib/utils/error"
  */
 
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission, checkCreatePermission } from "@/lib/server-permissions"
@@ -214,11 +215,22 @@ export async function getDetentionRecords(filters?: {
  * Check for new detentions and create records
  * This should be called periodically (e.g., every 15 minutes via cron)
  */
-export async function checkAndCreateDetentions() {
-  const supabase = await createClient()
-  const ctx = await getCachedAuthContext()
-  if (ctx.error || !ctx.companyId) {
-    return { error: ctx.error || "Not authenticated", data: null }
+export async function checkAndCreateDetentions(options?: { companyId?: string; fireAgentEval?: boolean }) {
+  // Automation/cron callers pass an explicit companyId (no user session): in that mode we use the
+  // service-role client scoped to that company. User-initiated calls keep the authenticated client.
+  const fireAgentEval = options?.fireAgentEval !== false
+  let supabase: Awaited<ReturnType<typeof createClient>>
+  let ctx: { companyId: string; error: string | null }
+  if (options?.companyId) {
+    supabase = createAdminClient() as unknown as Awaited<ReturnType<typeof createClient>>
+    ctx = { companyId: options.companyId, error: null }
+  } else {
+    supabase = await createClient()
+    const authCtx = await getCachedAuthContext()
+    if (authCtx.error || !authCtx.companyId) {
+      return { error: authCtx.error || "Not authenticated", data: null }
+    }
+    ctx = { companyId: authCtx.companyId, error: null }
   }
 
   try {
@@ -269,7 +281,7 @@ export async function checkAndCreateDetentions() {
       try {
         const minutesStationary = Number(detention.detention_minutes || 0)
         const freeTimeMinutes = Number(detention.detention_threshold_minutes || 0)
-        if (minutesStationary > freeTimeMinutes) {
+        if (minutesStationary > freeTimeMinutes && fireAgentEval) {
           runAgentEvaluation({
             companyId: ctx.companyId,
             trigger: "detention_clock",

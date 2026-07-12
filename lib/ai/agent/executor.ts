@@ -100,22 +100,22 @@ async function executeLoadStatusUpdate(payload: Record<string, unknown>): Promis
 
 async function executeDetentionClock(payload: Record<string, unknown>): Promise<ExecutionResult> {
   try {
-    const detentionModule = await import("@/app/actions/detention-tracking")
-    const startDetentionTimerFn =
-      (detentionModule as Record<string, unknown>).startDetentionTimer ||
-      (detentionModule as Record<string, unknown>).checkAndCreateDetentions
-
-    if (typeof startDetentionTimerFn !== "function") {
-      return { success: false, result: "", error: "No detention timer action is available" }
+    const companyId = asString(payload.companyId || payload.company_id)
+    if (!companyId) {
+      return { success: false, result: "", error: "companyId is required for detention clock" }
     }
 
-    const response = await (startDetentionTimerFn as () => Promise<{ error?: string }>)()
+    const { checkAndCreateDetentions } = await import("@/app/actions/detention-tracking")
+    // This runs from cron with no user session, so pass companyId explicitly (the action then uses
+    // the service-role client). fireAgentEval:false stops the scan from re-firing the
+    // "detention_clock" trigger, which would recurse straight back into this handler.
+    const response = await checkAndCreateDetentions({ companyId, fireAgentEval: false })
     if (response?.error) {
       return { success: false, result: "", error: String(response.error) }
     }
 
     const { sendPushToCompanyRoles } = await import("@/app/actions/push-notifications")
-    await sendPushToCompanyRoles(asString(payload.companyId || payload.company_id), ["dispatcher"], {
+    await sendPushToCompanyRoles(companyId, ["dispatcher"], {
       title: "Detention clock updated",
       body: "Detention timer action was triggered by TruckMates AI.",
       data: {

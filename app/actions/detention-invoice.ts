@@ -27,6 +27,17 @@ export async function addDetentionChargeToInvoice(input: {
 
   const supabase = await createClient()
 
+  // Idempotency: never bill the same detention event twice (retry / double-trigger / auto + manual).
+  const { data: priorEvent } = await supabase
+    .from("geofence_events")
+    .select("detention_billing_status")
+    .eq("id", input.eventId)
+    .eq("company_id", ctx.companyId)
+    .maybeSingle()
+  if (priorEvent?.detention_billing_status === "invoiced") {
+    return { error: "This detention event has already been invoiced.", data: null }
+  }
+
   const { data: existing } = await supabase
     .from("invoices")
     .select("id, items, amount, status")

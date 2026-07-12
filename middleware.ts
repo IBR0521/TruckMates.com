@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { mapLegacyRole } from '@/lib/roles'
 import { canViewFeature, type FeatureCategory } from '@/lib/feature-permissions'
-import { hasFeatureAccess, normalizePlanTier } from '@/lib/plan-limits'
+import { hasFeatureAccess, normalizePlanTier, tierAtLeast, type PlanTier } from '@/lib/plan-limits'
 
 /** Avoid hanging forever when Supabase is unreachable or misconfigured (browser spinner on /dashboard/*). */
 const SUPABASE_MIDDLEWARE_FETCH_MS = 12_000
@@ -165,13 +165,31 @@ function featureForDashboardPath(pathname: string): FeatureCategory | null {
   return null
 }
 
-function hasPlanFeature(planName: string, feature: 'route_optimization' | 'geofencing' | 'crm' | 'api_keys' | 'detention_report'): boolean {
-  const plan = planName.toLowerCase()
-  if (plan === 'enterprise' || plan === 'professional') return true
-  return false
+type RoutePlanFeature = 'route_optimization' | 'geofencing' | 'crm' | 'api_keys' | 'detention_report'
+
+/**
+ * Plan gate for premium dashboard routes, keyed off the normalized company tier.
+ * - geofencing / api_keys follow the published feature matrix (Starter+ / Fleet+) via hasFeatureAccess.
+ * - route optimization, CRM, and detention reporting are Professional-and-above, via a tier-rank
+ *   check so higher tiers (e.g. Fleet) are never wrongly excluded — the previous string check
+ *   `plan === 'professional' || 'enterprise'` silently blocked Fleet customers.
+ */
+function routeFeatureAllowed(tier: PlanTier, feature: RoutePlanFeature): boolean {
+  switch (feature) {
+    case 'geofencing':
+      return hasFeatureAccess(tier, 'geofencing_automation')
+    case 'api_keys':
+      return hasFeatureAccess(tier, 'public_api')
+    case 'route_optimization':
+    case 'crm':
+    case 'detention_report':
+      return tierAtLeast(tier, 'professional')
+    default:
+      return false
+  }
 }
 
-function requiredPlanFeatureForPath(pathname: string): 'route_optimization' | 'geofencing' | 'crm' | 'api_keys' | 'detention_report' | null {
+function requiredPlanFeatureForPath(pathname: string): RoutePlanFeature | null {
   if (/^\/dashboard\/routes\/optimize(\/|$)/.test(pathname)) return 'route_optimization'
   if (/^\/dashboard\/geofencing(\/|$)/.test(pathname)) return 'geofencing'
   if (/^\/dashboard\/crm(\/|$)/.test(pathname)) return 'crm'
@@ -379,11 +397,7 @@ export async function middleware(request: NextRequest) {
             const companyTier = normalizePlanTier(
               (company as { subscription_tier?: string | null } | null)?.subscription_tier ?? planName,
             )
-            const planAllowed =
-              requiredPlanFeature === 'api_keys'
-                ? hasFeatureAccess(companyTier, 'public_api')
-                : hasPlanFeature(planName, requiredPlanFeature)
-            if (!planAllowed) {
+            if (!routeFeatureAllowed(companyTier, requiredPlanFeature)) {
               const url = request.nextUrl.clone()
               url.pathname = '/dashboard/settings/billing'
               url.searchParams.set('upgrade', requiredPlanFeature === 'api_keys' ? 'public_api' : requiredPlanFeature)

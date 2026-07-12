@@ -23,6 +23,20 @@ messaging.onBackgroundMessage((payload) => {
   };
   self.registration.showNotification(title, options);
 });
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  const link = data.link || "/dashboard";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.indexOf(link) !== -1 && "focus" in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(link);
+    })
+  );
+});
 `
   return new NextResponse(body, {
     headers: {
