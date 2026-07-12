@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs"
+import { cache } from "react"
 import { createAdminClient } from "@/lib/supabase/admin"
 import {
   type PlanFeatures,
@@ -9,16 +10,37 @@ import {
   hasFeatureAccess,
 } from "@/lib/plan-limits"
 
-async function getCompanyTier(companyId: string): Promise<PlanTier> {
+type PlanNameRel = { name?: string | null } | Array<{ name?: string | null }> | null | undefined
+
+/**
+ * Resolve a company's entitlement tier from a single source of truth.
+ *
+ * The live subscription's plan is authoritative. `companies.subscription_tier` is a denormalized
+ * cache that historically drifted (F8 — a paid-plan change updated the `subscriptions` table but not
+ * the column, so paid customers were denied features and downgraded customers kept them). Resolving
+ * from the join first makes that drift self-healing on read; the column is used only as a fallback
+ * when there is no active/trialing subscription row (brand-new signup, manual provisioning, legacy).
+ */
+const getCompanyTier = cache(async (companyId: string): Promise<PlanTier> => {
   const admin = createAdminClient()
-  const { data } = await admin
+
+  const { data: sub } = await admin
+    .from("subscriptions")
+    .select("subscription_plans(name)")
+    .eq("company_id", companyId)
+    .in("status", ["active", "trialing"])
+    .maybeSingle()
+  const planRel = (sub as { subscription_plans?: PlanNameRel } | null)?.subscription_plans
+  const planName = Array.isArray(planRel) ? planRel[0]?.name : planRel?.name
+  if (planName) return normalizePlanTier(planName)
+
+  const { data: company } = await admin
     .from("companies")
     .select("subscription_tier")
     .eq("id", companyId)
     .maybeSingle()
-  const raw = (data as { subscription_tier?: string | null } | null)?.subscription_tier
-  return normalizePlanTier(raw ?? undefined)
-}
+  return normalizePlanTier((company as { subscription_tier?: string | null } | null)?.subscription_tier ?? undefined)
+})
 
 export async function checkResourceLimit(params: {
   companyId: string
