@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { scanAllInvoiceOverdue } from "@/app/actions/invoice-overdue-notify"
+import { reportCronFailure } from "@/lib/cron/report"
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization")
@@ -16,10 +17,12 @@ export async function GET(request: Request) {
   try {
     const result = await scanAllInvoiceOverdue()
     if (result.error) {
+      reportCronFailure("scan-invoice-overdue", result.error)
       return NextResponse.json({ success: false, error: result.error }, { status: 500 })
     }
     return NextResponse.json({ success: true, data: result.data })
   } catch (err: unknown) {
+    reportCronFailure("scan-invoice-overdue", err)
     return NextResponse.json(
       { success: false, error: errorMessage(err, "Invoice overdue scan failed") },
       { status: 500 },

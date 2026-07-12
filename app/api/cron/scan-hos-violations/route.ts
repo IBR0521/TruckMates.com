@@ -3,6 +3,7 @@ import { errorMessage } from "@/lib/error-message"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
 import { runAgentEvaluation } from "@/lib/ai/agent/loop"
+import { reportCronFailure } from "@/lib/cron/report"
 
 type EldHosClockRow = {
   id: string
@@ -403,6 +404,7 @@ export async function GET(request: Request) {
     })
   } catch (error: unknown) {
     console.error("[scan-hos] cron failed:", error)
+    reportCronFailure("scan-hos-violations", error)
     return NextResponse.json(
       { success: false, error: errorMessage(error, "HOS violation scan failed") },
       { status: 500 },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { scanAllDeliveryDelays } from "@/app/actions/delivery-delay-notify"
+import { reportCronFailure } from "@/lib/cron/report"
 
 /**
  * Superseded by `/api/cron/process-deadline-sweep` (deadline-tracking Phase 1).
@@ -20,10 +21,12 @@ export async function GET(request: Request) {
   try {
     const result = await scanAllDeliveryDelays()
     if (result.error) {
+      reportCronFailure("scan-delivery-delays", result.error)
       return NextResponse.json({ success: false, error: result.error }, { status: 500 })
     }
     return NextResponse.json({ success: true, data: result.data })
   } catch (err: unknown) {
+    reportCronFailure("scan-delivery-delays", err)
     return NextResponse.json(
       { success: false, error: errorMessage(err, "Delivery delay scan failed") },
       { status: 500 },

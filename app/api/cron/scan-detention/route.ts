@@ -4,6 +4,7 @@ import { haversineMiles } from "@/lib/promiles/geo"
 import { runAgentEvaluation } from "@/lib/ai/agent/loop"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
+import { reportCronFailure } from "@/lib/cron/report"
 
 export const maxDuration = 60
 
@@ -425,6 +426,7 @@ export async function GET(request: Request) {
     })
   } catch (error: unknown) {
     console.error("[scan-detention] cron failed:", error)
+    reportCronFailure("scan-detention", error)
     return NextResponse.json(
       {
         success: false,
