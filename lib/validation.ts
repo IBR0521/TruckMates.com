@@ -204,6 +204,20 @@ export function sanitizeString(input: string | undefined | null, maxLength?: num
 }
 
 /**
+ * Strip PostgREST filter metacharacters from a user search term before interpolating it into a
+ * `.or("col.ilike.%<term>%")` string, preventing filter-injection (breaking out of the OR group).
+ * RLS still enforces tenant scoping regardless; this closes within-tenant filter manipulation.
+ */
+export function sanitizeForOr(input: string | undefined | null): string {
+  return String(input ?? "")
+    .replace(/[,()]/g, "")
+    .replace(/\.(eq|neq|gt|gte|lt|lte|like|ilike|is|in|cs|cd|ov|sl|sr|nxr|nxl|adj|not|fts|plfts|phfts|wfts)/gi, "")
+    .replace(/%/g, "")
+    .trim()
+    .substring(0, 200)
+}
+
+/**
  * Sanitize email
  */
 export function sanitizeEmail(email: string | undefined | null): string {

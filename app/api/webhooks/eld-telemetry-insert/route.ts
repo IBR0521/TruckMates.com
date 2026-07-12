@@ -1,3 +1,4 @@
+import crypto from "crypto"
 import { NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import {
@@ -22,10 +23,17 @@ type SupabaseWebhookPayload = {
   }
 }
 
+/** Constant-time secret comparison — hash both to fixed length so neither value nor its length leaks via timing. */
+function secretsMatch(provided: string, expected: string): boolean {
+  const a = crypto.createHash("sha256").update(provided).digest()
+  const b = crypto.createHash("sha256").update(expected).digest()
+  return crypto.timingSafeEqual(a, b)
+}
+
 export async function POST(request: Request) {
   const expectedSecret = process.env.ELD_TELEMETRY_WEBHOOK_SECRET
   const providedSecret = request.headers.get(SECRET_HEADER)
-  if (!expectedSecret || providedSecret !== expectedSecret) {
+  if (!expectedSecret || !providedSecret || !secretsMatch(providedSecret, expectedSecret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

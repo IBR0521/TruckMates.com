@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
+import { normalizePlanTier } from "@/lib/plan-limits"
+import * as Sentry from "@sentry/nextjs"
 
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || ""
 const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || ""
@@ -174,6 +176,27 @@ export async function POST(request: NextRequest) {
           onConflict: "company_id",
         })
 
+        // F8 FIX: sync companies.subscription_tier (entitlement source of truth) — mirrors
+        // Stripe/Paddle. PayPal previously wrote only the subscriptions table.
+        const { data: plan } = await supabase
+          .from("subscription_plans")
+          .select("name")
+          .eq("id", finalPlanId)
+          .maybeSingle()
+        if (plan) {
+          const tier = normalizePlanTier((plan as { name?: string | null }).name)
+          const { error: tierErr } = await supabase
+            .from("companies")
+            .update({ subscription_tier: tier })
+            .eq("id", userData.company_id)
+          if (tierErr) {
+            Sentry.captureMessage(`[paypal webhook] company tier sync failed: ${tierErr.message}`, {
+              level: "error",
+              extra: { companyId: userData.company_id, tier },
+            })
+          }
+        }
+
         break
       }
 
@@ -189,6 +212,25 @@ export async function POST(request: NextRequest) {
             canceled_at: new Date().toISOString(),
           })
           .eq("paypal_subscription_id", subscriptionId)
+
+        // F8 FIX: drop entitlement tier back to the base plan on cancellation.
+        const { data: canceledSub } = await supabase
+          .from("subscriptions")
+          .select("company_id")
+          .eq("paypal_subscription_id", subscriptionId)
+          .maybeSingle()
+        if (canceledSub?.company_id) {
+          const { error: tierErr } = await supabase
+            .from("companies")
+            .update({ subscription_tier: "starter" })
+            .eq("id", canceledSub.company_id)
+          if (tierErr) {
+            Sentry.captureMessage(`[paypal webhook] company tier downgrade failed: ${tierErr.message}`, {
+              level: "error",
+              extra: { companyId: canceledSub.company_id },
+            })
+          }
+        }
 
         break
       }

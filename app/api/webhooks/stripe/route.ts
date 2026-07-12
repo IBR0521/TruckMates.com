@@ -4,6 +4,8 @@ import { headers } from "next/headers"
 import Stripe from "stripe"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { capturePostHogServerEvent } from "@/lib/analytics/posthog-server"
+import { normalizePlanTier } from "@/lib/plan-limits"
+import * as Sentry from "@sentry/nextjs"
 
 type AdminClient = ReturnType<typeof createAdminClient>
 
@@ -137,7 +139,7 @@ async function handleSubscriptionUpdated(supabase: AdminClient, subscription: St
   // Get plan details
   const { data: plan } = await supabase
     .from("subscription_plans")
-    .select("id")
+    .select("id, name")
     .eq("id", planId)
     .single()
 
@@ -185,6 +187,27 @@ async function handleSubscriptionUpdated(supabase: AdminClient, subscription: St
     throw error
   }
 
+  // F8 FIX: keep companies.subscription_tier (the entitlement source of truth read by
+  // getCompanyTier / plan-enforcement) in sync with the paid plan. Mirrors the Paddle webhook,
+  // which already does this — Stripe + PayPal previously updated only the subscriptions table,
+  // leaving upgraded customers denied features and downgraded customers over-entitled.
+  const tier = normalizePlanTier((plan as { name?: string | null }).name)
+  const tierPatch: Record<string, string> | null =
+    status === "active" || status === "trialing"
+      ? { subscription_tier: tier }
+      : status === "canceled"
+        ? { subscription_tier: "starter" }
+        : null
+  if (tierPatch) {
+    const { error: tierErr } = await supabase.from("companies").update(tierPatch).eq("id", companyId)
+    if (tierErr) {
+      Sentry.captureMessage(`[stripe webhook] company tier sync failed: ${tierErr.message}`, {
+        level: "error",
+        extra: { companyId, tier, status },
+      })
+    }
+  }
+
   await capturePostHogServerEvent(`company:${companyId}`, "plan_upgraded", {
     company_id: companyId,
     plan_id: planId,
@@ -214,6 +237,19 @@ async function handleSubscriptionDeleted(supabase: AdminClient, subscription: St
   if (error) {
     console.error("Error updating subscription:", error)
     throw error
+  }
+
+  // F8 FIX: drop the entitlement tier back to the base plan on cancellation so canceled
+  // customers stop retaining paid features (getCompanyTier reads companies.subscription_tier).
+  const { error: tierErr } = await supabase
+    .from("companies")
+    .update({ subscription_tier: "starter" })
+    .eq("id", companyId)
+  if (tierErr) {
+    Sentry.captureMessage(`[stripe webhook] company tier downgrade failed: ${tierErr.message}`, {
+      level: "error",
+      extra: { companyId },
+    })
   }
 
   console.log(`Subscription canceled for company ${companyId}`)

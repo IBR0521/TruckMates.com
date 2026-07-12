@@ -3,6 +3,7 @@
 import { safeDbError } from "@/lib/utils/error"
 import { addDays } from "date-fns"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -298,7 +299,9 @@ export async function quickAssignLoad(loadId: string, driverId?: string, truckId
     updateData.status = "scheduled"
   }
 
-  const { error: rpcAssignError } = await supabase.rpc("assign_load_transactional", {
+  // F14: service-role-only RPC (revoked from `authenticated`); this action already enforced auth + edit permission.
+  const admin = createAdminClient()
+  const { error: rpcAssignError } = await admin.rpc("assign_load_transactional", {
     p_load_id: loadId,
     p_company_id: ctx.companyId,
     p_truck_id: truckId ?? null,

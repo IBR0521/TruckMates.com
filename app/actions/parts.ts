@@ -1,6 +1,7 @@
 "use server"
 
 import { safeDbError } from "@/lib/utils/error"
+import { sanitizeForOr } from "@/lib/validation"
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
@@ -42,7 +43,8 @@ export async function getParts(filters?: {
   }
 
   if (filters?.search) {
-    query = query.or(`name.ilike.%${filters.search}%,part_number.ilike.%${filters.search}%,description.ilike.%${filters.search}%`)
+    const s = sanitizeForOr(filters.search)
+    query = query.or(`name.ilike.%${s}%,part_number.ilike.%${s}%,description.ilike.%${s}%`)
   }
 
     // Prevent unbounded inventory reads as parts grow.

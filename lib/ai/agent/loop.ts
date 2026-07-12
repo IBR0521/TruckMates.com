@@ -8,13 +8,17 @@ import {
   getMaintenanceContext,
 } from "@/lib/ai/context"
 import { executeAgentAction } from "@/lib/ai/agent/executor"
+import {
+  requiresHumanApprovalForAutonomous,
+  resolveActionTypeForTrigger,
+} from "@/lib/ai/agent/action-routing"
 import { extractDedupFingerprint, fingerprintsOverlap } from "@/lib/ai/agent/dedup-fingerprints"
 import { createPendingApproval, getAutomationConfig, logAutomationEvent } from "@/lib/ai/agent/settings"
 import { chooseAgentDecisionModel } from "@/lib/ai/model-router"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { LOGISTICS_SYSTEM_PROMPT } from "@/lib/ai/prompts/system"
 import { sendPushToCompanyRoles } from "@/app/actions/push-notifications"
-import type { AgentAction, AgentDecision } from "@/lib/ai/types"
+import type { AgentAction, AgentDecision, AutomationLevel } from "@/lib/ai/types"
 import {
   categorizeSafetyCompliance,
   EXPLAINABILITY_PROMPT_VERSION_AGENT,
@@ -162,6 +166,67 @@ function buildFallbackDecision(reasoning: string): AgentDecision {
   }
 }
 
+async function submitAgentPendingApproval(params: {
+  companyId: string
+  trigger: string
+  logLevel: AutomationLevel
+  decision: AgentDecision
+  triggerData: Record<string, unknown>
+  descriptionSuffix?: string
+  extraActionPayload?: Record<string, unknown>
+}): Promise<string | null> {
+  const action = params.decision.action
+  if (!action) return null
+
+  const approvalResult = await createPendingApproval({
+    companyId: params.companyId,
+    automationType: params.trigger,
+    description: `${action.type}: ${params.decision.reasoning}${params.descriptionSuffix ?? ""}`,
+    confidence: params.decision.confidence,
+    reasoning: params.decision.reasoning,
+    actionPayload: {
+      action,
+      trigger: params.trigger,
+      triggerData: params.triggerData,
+    },
+  })
+
+  const approvalId = approvalResult.data?.id || null
+
+  await sendPushToCompanyRoles(params.companyId, ["operations_manager"], {
+    title: "AI action awaiting approval",
+    body: params.decision.reasoning,
+    data: {
+      type: "ai_pending_approval",
+      approvalId: approvalId || "",
+      // Deep-link to the in-app approvals screen (which POSTs to /api/ai/approve).
+      // Do NOT point at the API route: it is POST + auth + JSON-body only, so a
+      // notification GET like `/api/ai/approve?approved=true` would 405 and mutate nothing.
+      link: "/dashboard/settings/ai-automation/pending-approvals",
+    },
+  })
+
+  await logAutomationEvent({
+    companyId: params.companyId,
+    automationType: params.trigger,
+    level: params.logLevel,
+    triggered: true,
+    confidence: params.decision.confidence,
+    reasoning: params.decision.reasoning,
+    actionTaken: "pending_approval",
+    actionPayload: {
+      action,
+      approvalId,
+      triggerData: params.triggerData,
+      ...params.extraActionPayload,
+    },
+    approved: null,
+    reversedAt: null,
+  })
+
+  return approvalId
+}
+
 export async function runAgentEvaluation(params: RunAgentEvaluationParams): Promise<{
   decision: AgentDecision
   executed: boolean
@@ -256,9 +321,10 @@ export async function runAgentEvaluation(params: RunAgentEvaluationParams): Prom
     '  "shouldAct": boolean,',
     '  "confidence": number,',
     '  "reasoning": string,',
-    '  "suggestedAction": string,',
     '  "actionPayload": { "any": "object" }',
     "}",
+    "",
+    "Do not choose or name an action type — the handler is fixed by the trigger. Only supply parameters in actionPayload.",
   ].join("\n")
 
   const aiResponse = await callClaude<AiDecisionPayload>(LOGISTICS_SYSTEM_PROMPT, decisionPrompt, {
@@ -297,18 +363,43 @@ export async function runAgentEvaluation(params: RunAgentEvaluationParams): Prom
     shouldAct = false
   }
 
-  const action: AgentAction | null = shouldAct
-    ? {
-        type: normalized.suggestedAction || params.trigger,
-        companyId: params.companyId,
-        triggeredBy: params.trigger,
-        payload: { ...toRecord(params.triggerData), ...normalized.actionPayload },
-        confidence: normalized.confidence,
-        reasoning: normalized.reasoning,
-        automationLevel: config.level,
-        reversible: toBoolean(normalized.actionPayload.reversible, true),
-      }
-    : null
+  const resolvedActionType = resolveActionTypeForTrigger(params.trigger)
+
+  if (shouldAct && !resolvedActionType) {
+    const reasoning = `Skipped: trigger '${params.trigger}' has no mapped handler.`
+    const decision = buildFallbackDecision(reasoning)
+    await logAutomationEvent({
+      companyId: params.companyId,
+      automationType: params.trigger,
+      level: config.level,
+      triggered: false,
+      confidence: normalized.confidence,
+      reasoning,
+      actionTaken: "skipped_unmapped_trigger",
+      actionPayload: {
+        triggerData: params.triggerData,
+        context: assembledContext,
+        suggestedAction: normalized.suggestedAction || null,
+      },
+      approved: null,
+      reversedAt: null,
+    })
+    return { decision, executed: false, pendingApprovalId: null }
+  }
+
+  const action: AgentAction | null =
+    shouldAct && resolvedActionType
+      ? {
+          type: resolvedActionType,
+          companyId: params.companyId,
+          triggeredBy: params.trigger,
+          payload: { ...toRecord(params.triggerData), ...normalized.actionPayload },
+          confidence: normalized.confidence,
+          reasoning: normalized.reasoning,
+          automationLevel: config.level,
+          reversible: toBoolean(normalized.actionPayload.reversible, true),
+        }
+      : null
 
   const decision: AgentDecision = {
     shouldAct,
@@ -418,47 +509,12 @@ export async function runAgentEvaluation(params: RunAgentEvaluationParams): Prom
   }
 
   if (config.level === "approval") {
-    const approvalResult = await createPendingApproval({
+    const approvalId = await submitAgentPendingApproval({
       companyId: params.companyId,
-      automationType: params.trigger,
-      description: `${decision.action.type}: ${decision.reasoning}`,
-      confidence: decision.confidence,
-      reasoning: decision.reasoning,
-      actionPayload: {
-        action: decision.action,
-        trigger: params.trigger,
-        triggerData: params.triggerData,
-      },
-    })
-
-    const approvalId = approvalResult.data?.id || null
-
-    await sendPushToCompanyRoles(params.companyId, ["operations_manager"], {
-      title: "AI action awaiting approval",
-      body: decision.reasoning,
-      data: {
-        type: "ai_pending_approval",
-        approvalId: approvalId || "",
-        approveUrl: `/api/ai/approve?approvalId=${approvalId || ""}&approved=true`,
-        rejectUrl: `/api/ai/approve?approvalId=${approvalId || ""}&approved=false`,
-      },
-    })
-
-    await logAutomationEvent({
-      companyId: params.companyId,
-      automationType: params.trigger,
-      level: config.level,
-      triggered: true,
-      confidence: decision.confidence,
-      reasoning: decision.reasoning,
-      actionTaken: "pending_approval",
-      actionPayload: {
-        action: decision.action,
-        approvalId,
-        triggerData: params.triggerData,
-      },
-      approved: null,
-      reversedAt: null,
+      trigger: params.trigger,
+      logLevel: config.level,
+      decision,
+      triggerData: params.triggerData,
     })
 
     return { decision, executed: false, pendingApprovalId: approvalId }
@@ -468,48 +524,49 @@ export async function runAgentEvaluation(params: RunAgentEvaluationParams): Prom
     const { checkFeatureAccess } = await import("@/lib/plan-enforcement")
     const { allowed } = await checkFeatureAccess({ companyId: params.companyId, feature: "ai_autonomous_agent" })
     if (!allowed) {
-      const approvalResult = await createPendingApproval({
+      const approvalId = await submitAgentPendingApproval({
         companyId: params.companyId,
-        automationType: params.trigger,
-        description: `${decision.action!.type}: ${decision.reasoning} (autonomous requires Professional+)`,
-        confidence: decision.confidence,
-        reasoning: decision.reasoning,
-        actionPayload: {
-          action: decision.action,
-          trigger: params.trigger,
-          triggerData: params.triggerData,
-        },
-      })
-      const approvalId = approvalResult.data?.id || null
-      await sendPushToCompanyRoles(params.companyId, ["operations_manager"], {
-        title: "AI action awaiting approval",
-        body: decision.reasoning,
-        data: {
-          type: "ai_pending_approval",
-          approvalId: approvalId || "",
-          approveUrl: `/api/ai/approve?approvalId=${approvalId || ""}&approved=true`,
-          rejectUrl: `/api/ai/approve?approvalId=${approvalId || ""}&approved=false`,
-        },
-      })
-      await logAutomationEvent({
-        companyId: params.companyId,
-        automationType: params.trigger,
-        level: "approval",
-        triggered: true,
-        confidence: decision.confidence,
-        reasoning: decision.reasoning,
-        actionTaken: "pending_approval",
-        actionPayload: {
-          action: decision.action,
-          approvalId,
-          triggerData: params.triggerData,
-          downgradedFromAutonomous: true,
-        },
-        approved: null,
-        reversedAt: null,
+        trigger: params.trigger,
+        logLevel: "approval",
+        decision,
+        triggerData: params.triggerData,
+        descriptionSuffix: " (autonomous requires Professional+)",
+        extraActionPayload: { downgradedFromAutonomous: true },
       })
       return { decision, executed: false, pendingApprovalId: approvalId }
     }
+
+    if (requiresHumanApprovalForAutonomous(decision.action.type)) {
+      const approvalId = await submitAgentPendingApproval({
+        companyId: params.companyId,
+        trigger: params.trigger,
+        logLevel: config.level,
+        decision,
+        triggerData: params.triggerData,
+        extraActionPayload: { forcedApprovalReason: "messaging_or_money" },
+      })
+      return { decision, executed: false, pendingApprovalId: approvalId }
+    }
+  }
+
+  // Defense in depth: only the autonomous level may auto-execute. off/notify/approval all return
+  // earlier, so reaching here at another level should be impossible — but guard explicitly so a
+  // future level (or a reordering above) can never silently fall through into autonomous execution
+  // of money/messaging actions.
+  if (config.level !== "autonomous") {
+    await logAutomationEvent({
+      companyId: params.companyId,
+      automationType: params.trigger,
+      level: config.level,
+      triggered: false,
+      confidence: decision.confidence,
+      reasoning: `${decision.reasoning} Skipped auto-execution: level '${config.level}' is not autonomous.`,
+      actionTaken: "skipped_non_autonomous",
+      actionPayload: { action: decision.action, triggerData: params.triggerData },
+      approved: null,
+      reversedAt: null,
+    })
+    return { decision: { ...decision, shouldAct: false, action: null }, executed: false, pendingApprovalId: null }
   }
 
   const execution = await executeAgentAction(decision.action)

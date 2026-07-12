@@ -3,6 +3,7 @@ import { errorMessage, sanitizeError } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
+import { decryptCredential } from "@/lib/crypto/eld-credentials"
 
 function getRequiredEnv(name: string): string {
   const v = process.env[name]
@@ -42,7 +43,8 @@ export async function POST(request: NextRequest) {
         .eq("company_id", ctx.companyId)
         .maybeSingle()
 
-      const tokenToRevoke = row?.quickbooks_refresh_token || row?.quickbooks_access_token
+      const storedToken = row?.quickbooks_refresh_token || row?.quickbooks_access_token
+      const tokenToRevoke = storedToken ? decryptCredential(String(storedToken)) : null
       if (tokenToRevoke) {
         const clientId = getRequiredEnv("QUICKBOOKS_CLIENT_ID")
         const clientSecret = getRequiredEnv("QUICKBOOKS_CLIENT_SECRET")

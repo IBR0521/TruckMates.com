@@ -1,6 +1,7 @@
 "use server"
 
 import { safeDbError } from "@/lib/utils/error"
+import { sanitizeForOr } from "@/lib/validation"
 import { createClient } from "@/lib/supabase/server"
 import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
@@ -129,7 +130,8 @@ export async function getBOLs(filters?: {
 
     // MEDIUM FIX 3: Add server-side search support
     if (filters?.search) {
-      query = query.or(`bol_number.ilike.%${filters.search}%,shipper_name.ilike.%${filters.search}%,consignee_name.ilike.%${filters.search}%`)
+      const s = sanitizeForOr(filters.search)
+      query = query.or(`bol_number.ilike.%${s}%,shipper_name.ilike.%${s}%,consignee_name.ilike.%${s}%`)
     }
 
     const { data, error } = await query

@@ -2,6 +2,7 @@
 
 import { safeDbError } from "@/lib/utils/error"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { errorMessage } from "@/lib/error-message"
 import { revalidatePath } from "next/cache"
 import { invalidateAiContextCache } from "@/lib/ai/answer-cache"
@@ -871,7 +872,10 @@ export async function createInvoice(formData: {
   }
 
   try {
-    const { data: rpcInvoice, error: rpcInvoiceError } = await supabase.rpc("create_invoice_transactional", {
+    // F14: this SECURITY DEFINER RPC is now service-role-only (revoked from `authenticated`), so it
+    // can't be invoked directly via PostgREST to bypass the auth + RBAC + credit checks done above.
+    const admin = createAdminClient()
+    const { data: rpcInvoice, error: rpcInvoiceError } = await admin.rpc("create_invoice_transactional", {
       p_company_id: ctx.companyId,
       p_load_id: formData.load_id || null,
       p_invoice_number: invoiceNumber,
@@ -1671,7 +1675,9 @@ export async function createSettlement(formData: {
 
   let data: { id: string } | null = null
   try {
-    const { data: rpcResult, error: rpcError } = await supabase.rpc("create_settlement_transactional", {
+    // F14: service-role-only RPC (see create_invoice_transactional) — RBAC enforced in-action above.
+    const admin = createAdminClient()
+    const { data: rpcResult, error: rpcError } = await admin.rpc("create_settlement_transactional", {
       p_company_id: ctx.companyId,
       p_driver_id: formData.driver_id,
       p_period_start: formData.period_start,

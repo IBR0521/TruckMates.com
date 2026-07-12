@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { syncAllCompaniesCSAScores } from "@/app/actions/csa-scores"
+import { syncAllCompaniesCSAScores } from "@/lib/compliance/csa-sync"
 import { errorMessage } from "@/lib/error-message"
 
 export async function GET(request: Request) {

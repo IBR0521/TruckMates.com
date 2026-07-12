@@ -1,4 +1,6 @@
-"use server"
+// NOT a "use server" module (F9): these are cron workers that take a companyId and run on the
+// service-role admin client. As server actions, any authenticated user could invoke them for an
+// arbitrary company (cross-tenant side effects). Imported only by cron routes / the agent executor.
 
 import { createAdminClient } from "@/lib/supabase/admin"
 import { sendNotification } from "@/app/actions/notifications"

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { encryptCredential, decryptCredential } from "@/lib/crypto/eld-credentials"
 
 export type QuickBooksConnection = {
   companyId: string
@@ -63,8 +64,9 @@ export async function getQuickBooksConnection(companyId: string): Promise<QuickB
   if (!data.quickbooks_enabled || !data.quickbooks_company_id) throw new Error("QuickBooks not connected")
 
   const realmId = String(data.quickbooks_company_id)
-  let accessToken = data.quickbooks_access_token as string | null
-  const refreshToken = data.quickbooks_refresh_token as string | null
+  // Tokens are encrypted at rest (AES-256-GCM). decryptCredential passes through legacy plaintext unchanged.
+  let accessToken = data.quickbooks_access_token ? decryptCredential(String(data.quickbooks_access_token)) : null
+  const refreshToken = data.quickbooks_refresh_token ? decryptCredential(String(data.quickbooks_refresh_token)) : null
 
   if (!accessToken || !refreshToken) throw new Error("Missing QuickBooks tokens")
 
@@ -82,8 +84,8 @@ export async function getQuickBooksConnection(companyId: string): Promise<QuickB
     await supabase
       .from("company_integrations")
       .update({
-        quickbooks_access_token: accessToken,
-        quickbooks_refresh_token: refreshed.refresh_token || refreshToken,
+        quickbooks_access_token: encryptCredential(accessToken),
+        quickbooks_refresh_token: encryptCredential(refreshed.refresh_token || refreshToken),
         quickbooks_token_expires_at: newExpiresAt,
       })
       .eq("company_id", companyId)

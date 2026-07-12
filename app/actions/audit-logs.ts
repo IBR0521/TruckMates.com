@@ -1,6 +1,7 @@
 "use server"
 
 import * as Sentry from "@sentry/nextjs"
+import { sanitizeForOr } from "@/lib/validation"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { checkViewPermission } from "@/lib/server-permissions"
@@ -90,7 +91,7 @@ export async function getAuditLogs(filters?: {
     if (filters?.date_from) query = query.gte("created_at", `${filters.date_from}T00:00:00`)
     if (filters?.date_to) query = query.lte("created_at", `${filters.date_to}T23:59:59.999`)
     if (filters?.search && filters.search.trim()) {
-      const q = filters.search.trim()
+      const q = sanitizeForOr(filters.search)
       query = query.or(`action.ilike.%${q}%,resource_type.ilike.%${q}%,resource_id.ilike.%${q}%`)
     }
 

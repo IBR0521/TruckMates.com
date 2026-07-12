@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { errorMessage } from "@/lib/error-message"
 import { checkCreatePermission, checkDeletePermission, checkEditPermission, checkViewPermission } from "@/lib/server-permissions"
-import { sanitizeEmail, sanitizePhone, sanitizeString } from "@/lib/validation"
+import { sanitizeEmail, sanitizePhone, sanitizeString, sanitizeForOr } from "@/lib/validation"
 import { revalidatePath } from "next/cache"
 import { createDriver } from "@/app/actions/drivers"
 import { Document, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer"
@@ -114,7 +114,7 @@ export async function getDriverApplications(filters?: { stage?: string; search?:
 
     if (filters?.stage) query = query.eq("stage", normalizeStage(filters.stage))
     if (filters?.search) {
-      const q = sanitizeString(filters.search, 100).trim()
+      const q = sanitizeForOr(sanitizeString(filters.search, 100))
       if (q) query = query.or(`applicant_name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,cdl_number.ilike.%${q}%`)
     }
 

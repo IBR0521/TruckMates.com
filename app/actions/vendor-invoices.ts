@@ -7,7 +7,7 @@ import { errorMessage } from "@/lib/error-message"
 import { getCachedAuthContext } from "@/lib/auth/server"
 import { revalidatePath } from "next/cache"
 import { checkViewPermission, checkCreatePermission, checkEditPermission, checkDeletePermission } from "@/lib/server-permissions"
-import { sanitizeString } from "@/lib/validation"
+import { sanitizeString, sanitizeForOr } from "@/lib/validation"
 import { fetchAllRowsByIdCursor } from "@/lib/supabase/fetch-all-by-id-cursor"
 export type VendorInvoiceStatus = "draft" | "approved" | "paid" | "overdue"
 type APAgingBucketKey = "0-30" | "31-60" | "61-90" | "90+"
@@ -94,7 +94,7 @@ export async function getVendorInvoices(filters?: {
       if (filters?.status) q = q.eq("status", filters.status)
       if (filters?.vendor_id) q = q.eq("vendor_id", filters.vendor_id)
       if (filters?.search) {
-        const s = sanitizeString(filters.search, 120).trim()
+        const s = sanitizeForOr(sanitizeString(filters.search, 120))
         if (s.length > 0) {
           q = q.or(`invoice_number.ilike.%${s}%,gl_code.ilike.%${s}%`)
         }
@@ -126,7 +126,7 @@ export async function getVendorInvoices(filters?: {
     if (filters?.vendor_id) query = query.eq("vendor_id", filters.vendor_id)
 
     if (filters?.search) {
-      const q = sanitizeString(filters.search, 120).trim()
+      const q = sanitizeForOr(sanitizeString(filters.search, 120))
       if (q.length > 0) {
         query = query.or(`invoice_number.ilike.%${q}%,gl_code.ilike.%${q}%`)
       }

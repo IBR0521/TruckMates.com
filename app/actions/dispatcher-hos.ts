@@ -244,6 +244,13 @@ export async function getAllDriversHOSStatusByCompany(companyId: string): Promis
   error: string | null
 }> {
   try {
+    // F9: exported from a "use server" module, so this is a client-reachable endpoint. Require the
+    // caller to be authenticated and scoped to their OWN company — it previously trusted companyId
+    // and returned another company's drivers' HOS data (cross-tenant PII read).
+    const ctx = await getCachedAuthContext()
+    if (ctx.error || !ctx.companyId || ctx.companyId !== companyId) {
+      return { error: "Not authorized", data: null }
+    }
     return await computeDriversHOSStatusWithCompany(companyId, () => createAdminClient())
   } catch (error: unknown) {
     return { error: errorMessage(error, "Failed to get drivers HOS status"), data: null }

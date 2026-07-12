@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { createClient } from "@/lib/supabase/server"
 import { getCachedAuthContext } from "@/lib/auth/server"
+import { encryptCredential } from "@/lib/crypto/eld-credentials"
 import { getCurrentCompanyFeatureAccess } from "@/lib/plan-gates"
 
 function getRequiredEnv(name: string): string {
@@ -114,8 +115,8 @@ export async function GET(request: NextRequest) {
           company_id: ctx.companyId,
           quickbooks_enabled: true,
           quickbooks_company_id: realmId,
-          quickbooks_access_token: tokens.access_token,
-          quickbooks_refresh_token: tokens.refresh_token,
+          quickbooks_access_token: encryptCredential(tokens.access_token),
+          quickbooks_refresh_token: encryptCredential(tokens.refresh_token),
           quickbooks_token_expires_at: expiresAt,
           quickbooks_sandbox: isSandbox,
           quickbooks_synced_at: null,
