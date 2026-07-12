@@ -8,10 +8,11 @@ import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { AlertTriangle, ChevronDown, Pause, Play, Settings2, Clock, CheckCircle2, XCircle, RotateCcw } from "lucide-react"
+import { AlertTriangle, ChevronDown, Pause, Play, Settings2, Clock, CheckCircle2, XCircle, RotateCcw, Sparkles } from "lucide-react"
 import { createClient as createBrowserClient } from "@/lib/supabase/client"
-import { loadCompanyAutomationSettings, saveAutomationConfig } from "./actions"
+import { applyAutonomyPreset, loadCompanyAutomationSettings, saveAutomationConfig } from "./actions"
 import type { AutomationConfig } from "@/lib/ai/agent/types"
+import { type AutonomyPreset } from "@/lib/ai/agent/autonomy-presets"
 import { CASH_FLOW_TIER0 } from "@/lib/ai/agent/cash-flow-gate"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -124,6 +125,7 @@ export function AiAutomationClientPage({ companyId }: { companyId: string }) {
   const [savingKeys, setSavingKeys] = useState<Record<string, boolean>>({})
   const [pauseAll, setPauseAll] = useState(false)
   const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({})
+  const [applyingPreset, setApplyingPreset] = useState<AutonomyPreset | null>(null)
 
   const loadPageData = useCallback(async () => {
     setLoading(true)
@@ -166,6 +168,30 @@ export function AiAutomationClientPage({ companyId }: { companyId: string }) {
   }, [companyId])
 
   useEffect(() => { loadPageData() }, [loadPageData])
+
+  const handleApplyPreset = useCallback(
+    async (preset: AutonomyPreset) => {
+      setApplyingPreset(preset)
+      try {
+        const res = await applyAutonomyPreset(preset)
+        if (res.error) {
+          toast.error(res.error)
+          return
+        }
+        toast.success(
+          preset === "manual"
+            ? "Manual mode — the AI will watch and notify only."
+            : preset === "assisted"
+              ? "Assisted autopilot on — safe actions run automatically; money & customer actions ask first."
+              : "Full autopilot on — money and messaging actions still ask before sending.",
+        )
+        await loadPageData()
+      } finally {
+        setApplyingPreset(null)
+      }
+    },
+    [loadPageData],
+  )
 
   const upsertConfigOptimistic = useCallback(
     async (
@@ -285,6 +311,39 @@ export function AiAutomationClientPage({ companyId }: { companyId: string }) {
               </span>
               <span className="h-4 w-px bg-border" />
               <span>Changes save automatically</span>
+            </div>
+          )}
+
+          {/* One-click autopilot */}
+          {!loading && (
+            <div className="rounded-xl border border-border bg-card/50 p-4 md:p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-emerald-500" />
+                    <p className="text-sm font-semibold text-foreground">One-click autopilot</p>
+                  </div>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    Set every automation at once. Money, customer, and messaging actions always ask first.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" disabled={applyingPreset !== null} onClick={() => void handleApplyPreset("manual")}>
+                    {applyingPreset === "manual" ? "Applying…" : "Manual"}
+                  </Button>
+                  <Button size="sm" variant="outline" disabled={applyingPreset !== null} onClick={() => void handleApplyPreset("assisted")}>
+                    {applyingPreset === "assisted" ? "Applying…" : "Assisted"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={applyingPreset !== null}
+                    onClick={() => void handleApplyPreset("autopilot")}
+                    className="bg-emerald-500 hover:bg-emerald-600 border-emerald-500 text-white"
+                  >
+                    {applyingPreset === "autopilot" ? "Applying…" : "Autopilot"}
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 
