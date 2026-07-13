@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { processAlertEscalations } from "@/app/actions/alerts"
 import { processComplianceRegistrationExpiryAlerts } from "@/app/actions/compliance-registrations"
+import { reportCronFailure } from "@/lib/cron/report"
 
 // Cron endpoint to process alert escalations
 // Runs every 5 minutes to check for overdue alerts and escalate them
@@ -25,6 +26,7 @@ export async function GET(request: Request) {
 
     if (result.error) {
       console.error("[Cron Alert Escalations] Error:", result.error)
+      reportCronFailure("alert-escalations", result.error)
       return NextResponse.json(
         { error: result.error, success: false },
         { status: 500 }
@@ -44,6 +46,7 @@ export async function GET(request: Request) {
     })
   } catch (error: unknown) {
     console.error("[Cron Alert Escalations] Unexpected error:", error)
+    reportCronFailure("alert-escalations", error)
     return NextResponse.json(
       { error: errorMessage(error), success: false },
       { status: 500 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { logger } from "@/lib/logger"
 import { acquireJobLock, releaseJobLock } from "@/lib/cron/job-lock"
+import { reportCronFailure } from "@/lib/cron/report"
 import {
   clearDeadline,
   fetchDueDeadlines,
@@ -305,6 +306,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ success: true, processed, alerts, stale })
   } catch (error: unknown) {
     logger.error("[deadline-sweep] failed", error)
+    reportCronFailure("process-deadline-sweep", error)
     return NextResponse.json(
       { success: false, error: errorMessage(error, "Deadline sweep failed") },
       { status: 500 },

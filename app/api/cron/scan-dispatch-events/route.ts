@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { scanAllDispatchEvents } from "@/app/actions/dispatch-event-notify"
+import { reportCronFailure } from "@/lib/cron/report"
 
 /** Missed check-calls, driver-late, and emergency escalations run via process-deadline-sweep. */
 export async function GET(request: Request) {
@@ -17,10 +18,12 @@ export async function GET(request: Request) {
   try {
     const result = await scanAllDispatchEvents()
     if (result.error) {
+      reportCronFailure("scan-dispatch-events", result.error)
       return NextResponse.json({ success: false, error: result.error }, { status: 500 })
     }
     return NextResponse.json({ success: true, data: result.data })
   } catch (err: unknown) {
+    reportCronFailure("scan-dispatch-events", err)
     return NextResponse.json(
       { success: false, error: errorMessage(err, "Dispatch event scan failed") },
       { status: 500 },

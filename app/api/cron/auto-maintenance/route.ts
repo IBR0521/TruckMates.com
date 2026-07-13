@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { errorMessage } from "@/lib/error-message"
 import { autoScheduleMaintenanceForAllTrucksForCron } from "@/app/actions/auto-maintenance"
+import { reportCronFailure } from "@/lib/cron/report"
 
 // Cron endpoint to auto-schedule maintenance for all trucks
 // Can be called by Vercel Cron or external cron service
@@ -25,6 +26,7 @@ export async function GET(request: Request) {
     const result = await autoScheduleMaintenanceForAllTrucksForCron()
 
     if (result.error) {
+      reportCronFailure("auto-maintenance", result.error)
       return NextResponse.json(
         { error: result.error, success: false },
         { status: 500 }
@@ -38,6 +40,7 @@ export async function GET(request: Request) {
     })
   } catch (error: unknown) {
     console.error("Auto-maintenance cron error:", error)
+    reportCronFailure("auto-maintenance", error)
     return NextResponse.json(
       { error: errorMessage(error), success: false },
       { status: 500 }

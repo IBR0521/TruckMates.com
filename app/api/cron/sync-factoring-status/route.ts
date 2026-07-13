@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { syncAllPendingFactoringStatuses } from "@/app/actions/factoring-api"
+import { reportCronFailure } from "@/lib/cron/report"
 import { errorMessage } from "@/lib/error-message"
 
 export async function GET(request: Request) {
@@ -16,10 +17,12 @@ export async function GET(request: Request) {
   try {
     const result = await syncAllPendingFactoringStatuses()
     if (result.error) {
+      reportCronFailure("sync-factoring-status", result.error)
       return NextResponse.json({ success: false, error: result.error }, { status: 500 })
     }
     return NextResponse.json({ success: true, data: result.data })
   } catch (error: unknown) {
+    reportCronFailure("sync-factoring-status", error)
     return NextResponse.json({ success: false, error: errorMessage(error) }, { status: 500 })
   }
 }
