@@ -5,7 +5,7 @@ import Link from "next/link"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, RefreshCw, Sparkles } from "lucide-react"
+import { ArrowLeft, AlertTriangle, RefreshCw, Sparkles } from "lucide-react"
 import { createClient as createBrowserClient } from "@/lib/supabase/client"
 import { cn } from "@/lib/utils"
 
@@ -44,9 +44,19 @@ function labelFor(type: string): string {
   return AUTOMATION_LABELS[type] || type.replace(/_/g, " ")
 }
 
-type Tone = "done" | "approved" | "pending" | "rejected" | "reversed" | "none"
+type Tone = "done" | "approved" | "pending" | "rejected" | "reversed" | "none" | "error"
+
+// The AI (or its data call) failed — this is an outage, not automation "activity". Surface it honestly
+// instead of mislabeling it "reviewed, no action needed".
+const SYSTEM_ERROR_RE =
+  /credit balance|too low to access|connection timeout|failed to connect|ai unavailable|ai quota|check your internet|temporarily unavailable|database server error/i
+
+function isSystemError(row: ActivityRow): boolean {
+  return SYSTEM_ERROR_RE.test(String(row.reasoning || ""))
+}
 
 function outcomeFor(row: ActivityRow): { label: string; tone: Tone } {
+  if (isSystemError(row)) return { label: "AI unavailable", tone: "error" }
   if (row.reversed_at) return { label: "Reversed", tone: "reversed" }
   if (row.approved === false) return { label: "Rejected", tone: "rejected" }
   if (row.approved === true) return { label: "Approved & ran", tone: "approved" }
@@ -67,6 +77,8 @@ function toneClass(tone: Tone): string {
       return "border-destructive/40 bg-destructive/10 text-destructive"
     case "reversed":
       return "border-muted-foreground/30 bg-muted/40 text-muted-foreground"
+    case "error":
+      return "border-destructive/40 bg-destructive/10 text-destructive"
     default:
       return "border-border bg-muted/30 text-muted-foreground"
   }
@@ -127,6 +139,8 @@ export function AutomationActivityClientPage({ companyId }: { companyId: string 
     [rows],
   )
 
+  const systemErrorCount = useMemo(() => rows.filter(isSystemError).length, [rows])
+
   return (
     <div className="w-full">
       {/* Header */}
@@ -158,6 +172,20 @@ export function AutomationActivityClientPage({ companyId }: { companyId: string 
 
       <div className="p-4 md:p-8">
         <div className="mx-auto max-w-3xl space-y-6">
+          {!loading && systemErrorCount > 0 && (
+            <div className="flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" />
+              <div>
+                <p className="text-sm font-semibold text-destructive">
+                  AI couldn&apos;t run for {systemErrorCount} of these {rows.length} events
+                </p>
+                <p className="text-sm text-destructive/80">
+                  The automation hit an API or connection error — most often a low Anthropic API credit balance.
+                  Autonomous actions stay paused until it&apos;s restored. Check your Anthropic API billing (console.anthropic.com → Plans &amp; Billing).
+                </p>
+              </div>
+            </div>
+          )}
           {!loading && (
             <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3.5">
               <Sparkles className="h-4 w-4 flex-shrink-0 text-emerald-500" />
