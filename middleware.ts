@@ -284,7 +284,9 @@ export async function middleware(request: NextRequest) {
       },
     })
 
-    await supabase.auth.getSession()
+    // getUser() alone validates + refreshes the session (and persists rotated cookies via
+    // the setAll handler). The prior getSession() call before it was redundant network work
+    // on every request — dropped.
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -306,11 +308,30 @@ export async function middleware(request: NextRequest) {
       const currentRole = mapLegacyRole(profile?.role)
       const isManager = ['super_admin', 'operations_manager'].includes(String(currentRole || ''))
       if (profile?.company_id) {
-        const { data: company } = await supabase
-          .from('companies')
-          .select('setup_complete, setup_data, name, subscription_tier')
-          .eq('id', profile.company_id)
-          .maybeSingle()
+        // Company + subscription are both keyed by company_id and independent — fetch them
+        // together so the gating path is one DB round-trip instead of two sequential ones on
+        // every navigation. (Subscription is fetched eagerly even on paths that early-return
+        // before the payment gate; that's a cheap read, not a correctness change.)
+        const [companyResult, subscriptionResult] = await Promise.all([
+          supabase
+            .from('companies')
+            .select('setup_complete, setup_data, name, subscription_tier')
+            .eq('id', profile.company_id)
+            .maybeSingle(),
+          TEMP_DISABLE_PAYMENT_GATE
+            ? Promise.resolve({ data: null })
+            : supabase
+                .from('subscriptions')
+                .select(`
+                  status,
+                  trial_end,
+                  stripe_subscription_id,
+                  subscription_plans(name)
+                `)
+                .eq('company_id', profile.company_id)
+                .maybeSingle(),
+        ])
+        const company = companyResult.data
 
         const setupComplete = Boolean((company as { setup_complete?: boolean } | null)?.setup_complete)
         const companyName = String((company as { name?: string } | null)?.name || '').toLowerCase()
@@ -370,16 +391,8 @@ export async function middleware(request: NextRequest) {
         }
 
         if (!TEMP_DISABLE_PAYMENT_GATE) {
-          const { data: subscription } = await supabase
-            .from('subscriptions')
-            .select(`
-              status,
-              trial_end,
-              stripe_subscription_id,
-              subscription_plans(name)
-            `)
-            .eq('company_id', profile.company_id)
-            .maybeSingle()
+          // Already fetched in parallel with the company lookup above.
+          const subscription = subscriptionResult.data
 
           const subscriptionRow = subscription as SubscriptionRow | null
           const planRaw = subscriptionRow?.subscription_plans
