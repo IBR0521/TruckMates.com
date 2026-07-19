@@ -19,9 +19,15 @@ import { findNearbyDriversForLoad, type NearbyDriver } from "./proximity-dispatc
 import { checkAssignmentConflicts } from "./dispatch-timeline"
 import { calculateRemainingHOS } from "./eld-advanced"
 
-/** Fields used by optimal-driver scoring — `public.loads` base + extended columns */
+/**
+ * Fields used by optimal-driver scoring. Equipment matching is driven by `carrier_type`;
+ * there is no `requires_special_equipment` column on `public.loads` (never migrated), so we
+ * don't select it — a missing load column made this query throw and rendered a raw Postgres
+ * error on every dispatch card. Its absence just leaves equipment matching permissive, which
+ * is how getOptimalDriverSuggestions already behaved (it never set the flag).
+ */
 const DISPATCH_ASSIST_LOAD_SELECT =
-  "id, company_id, origin, destination, carrier_type, weight_kg, priority, load_date, estimated_delivery, coordinates, requires_special_equipment"
+  "id, company_id, origin, destination, carrier_type, weight_kg, priority, load_date, estimated_delivery, coordinates"
 
 export interface DriverSuggestion {
   driver_id: string
@@ -410,7 +416,7 @@ export async function getOptimalDriverSuggestionsForRoute(
     // Load requirements are inferred from loads attached to this route.
     const { data: routeLoads, error: routeLoadsError } = await supabase
       .from("loads")
-      .select("id, origin, destination, carrier_type, requires_special_equipment, weight_kg, priority, status")
+      .select("id, origin, destination, carrier_type, weight_kg, priority, status")
       .eq("route_id", routeId)
       .eq("company_id", ctx.companyId)
       .not("status", "in", '("delivered","cancelled","completed")')
@@ -433,7 +439,6 @@ export async function getOptimalDriverSuggestionsForRoute(
       destination: primaryLoad.destination,
       equipment_type: primaryLoad.carrier_type,
       weight_kg: primaryLoad.weight_kg,
-      requires_special_equipment: !!primaryLoad.requires_special_equipment,
       priority: primaryLoad.priority || "normal",
     }
 
